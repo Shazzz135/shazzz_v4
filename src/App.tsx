@@ -1,12 +1,6 @@
 
+import Sandbox from './levels/Sandbox';
 
-function App() {
-
-  return (
-    <>
-      Hi
-    </>
-  )
+export default function App() {
+  return <Sandbox />;
 }
-
-export default App
