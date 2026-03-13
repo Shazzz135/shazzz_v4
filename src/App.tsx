@@ -12,7 +12,7 @@ export default function App() {
 
   return (
     <>
-      <LoadingScreen isLoading={isLoading} onLoadingComplete={handleLoadingComplete} />
+      <LoadingScreen isLoading={isLoading} levelName="Dungeon" onLoadingComplete={handleLoadingComplete} />
       <Sandbox />
     </>
   );

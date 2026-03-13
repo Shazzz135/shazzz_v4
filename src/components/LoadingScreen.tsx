@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
-import bar0 from '/ui/bar/bar0.svg';
-import bar20 from '/ui/bar/bar20.svg';
-import bar40 from '/ui/bar/bar40.svg';
-import bar60 from '/ui/bar/bar60.svg';
-import bar80 from '/ui/bar/bar80.svg';
-import bar100 from '/ui/bar/bar100.svg';
-import dungeon from '/backgrounds/dungeon.webp';
+import bar0 from '../assets/ui/bar/bar0.svg';
+import bar20 from '../assets/ui/bar/bar20.svg';
+import bar40 from '../assets/ui/bar/bar40.svg';
+import bar60 from '../assets/ui/bar/bar60.svg';
+import bar80 from '../assets/ui/bar/bar80.svg';
+import bar100 from '../assets/ui/bar/bar100.svg';
+import dungeon from '../assets/backgrounds/dungeon.webp';
 
 const bars = [bar0, bar20, bar40, bar60, bar80, bar100];
 const BAR_DURATION = 300; // Duration per bar in ms
 
 interface LoadingScreenProps {
   isLoading: boolean;
+  levelName?: string;
   onLoadingComplete?: () => void;
 }
 
-export default function LoadingScreen({ isLoading, onLoadingComplete }: LoadingScreenProps) {
+export default function LoadingScreen({ isLoading, levelName = 'Dungeon', onLoadingComplete }: LoadingScreenProps) {
   const [barIndex, setBarIndex] = useState(0);
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -45,10 +46,14 @@ export default function LoadingScreen({ isLoading, onLoadingComplete }: LoadingS
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  // Trigger completion callback when loading is done
+  // Trigger completion callback when bar100 is shown with a delay
   useEffect(() => {
     if (barIndex >= bars.length - 1) {
-      onLoadingComplete?.();
+      // Wait 800ms after bar100 is displayed before loading the level
+      const timer = setTimeout(() => {
+        onLoadingComplete?.();
+      }, 800);
+      return () => clearTimeout(timer);
     }
   }, [barIndex, onLoadingComplete]);
 
@@ -74,7 +79,7 @@ export default function LoadingScreen({ isLoading, onLoadingComplete }: LoadingS
           className="text-white font-bold drop-shadow-md"
           style={{ fontSize: `${fontSize}px` }}
         >
-          Loading
+          {barIndex >= bars.length - 1 ? `Entering ${levelName}` : 'Loading'}
         </h1>
         <img
           src={bars[barIndex]}
