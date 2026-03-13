@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import type { LevelData } from '../data/sandboxData';
 import { sandboxLevel } from '../data/sandboxData';
 import Character from '../components/Character';
-import heartFull from '../assets/ui/heart_full.svg';
-import heartHalf from '../assets/ui/heart_half.svg';
-import heartEmpty from '../assets/ui/heart_empty.svg';
+import heartFull from '../assets/ui/heart/heart_full.svg';
+import heartHalf from '../assets/ui/heart/heart_half.svg';
+import heartEmpty from '../assets/ui/heart/heart_empty.svg';
 import type { GameObject } from '../types/GameObject';
 
 /**
