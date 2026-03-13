@@ -137,7 +137,7 @@ export const snapCharacterToSurface = (
   gridHeight: number,
   hitboxConfig?: CharacterHitbox
 ): CharacterState => {
-  let newChar = { ...character };
+  const newChar = { ...character };
   const charHitbox = getCharacterHitbox(newChar, hitboxConfig);
   const gridPixelHeight = gridHeight * cellSize;
 

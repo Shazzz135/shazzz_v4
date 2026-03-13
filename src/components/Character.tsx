@@ -321,7 +321,7 @@ export default function Character({
       // Update grid position ref even when not prone for next time
       lastGridPositionRef.current = getOccupiedGridCells(character, 'idle');
     }
-  }, [character.x, character.y, isProne, isProneLockedByObstacle]);
+  }, [character, isProne, isProneLockedByObstacle, checkForOverheadObstacle, getOccupiedGridCells]);
 
   // Update character size when scale changes
   useEffect(() => {
@@ -426,7 +426,7 @@ export default function Character({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching]);
+  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown]);
 
   // Animation state machine and frame updates
   useEffect(() => {
