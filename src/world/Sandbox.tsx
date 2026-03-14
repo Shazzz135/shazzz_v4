@@ -41,7 +41,7 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
   const [flickerState, setFlickerState] = useState(true); // Toggle for flicker animation
-  const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
+  const [showHitbox] = useState(false); // Debug: show hitboxes
   const animationTickRef = useRef(0);
 
   useEffect(() => {

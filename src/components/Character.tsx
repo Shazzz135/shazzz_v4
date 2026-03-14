@@ -328,7 +328,6 @@ export default function Character({
           // Auto-stand only if NOT holding 's'
           if (!isHoldingProneKey) {
             console.log('CHARACTER: Standing up (not holding prone key)');
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsProne(false);
           } else {
             console.log('CHARACTER: Staying prone (holding prone key)');
@@ -484,9 +483,7 @@ export default function Character({
 
     // Reset frame when animation state changes
     if (newAnimState !== animationState) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFrameIndex(0);
       animationTickRef.current = 0;
     }
