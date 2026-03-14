@@ -19,7 +19,7 @@ export const sandboxLevel: LevelData = {
       img: grassFull,
       hitbox: { x: 0, y: 0, width: 32, height: 32 },
       position: { x: 4 * 32, y: 9 * 32 }, // Grid D10
-      address: ['D8'],
+      address: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'N7'],
     },
   ],
   characterSpawn: 'B8', // Spawn at grid position E8

@@ -41,6 +41,7 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
   const [flickerState, setFlickerState] = useState(true); // Toggle for flicker animation
+  const [showHitbox] = useState(false); // Debug: show hitboxes
   const animationTickRef = useRef(0);
 
   useEffect(() => {
@@ -195,6 +196,41 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
           </div>
         )}
 
+        {/* Debug Layer - Hitboxes */}
+        {cellSize > 0 && showHitbox && (
+          <svg
+            className="absolute inset-0"
+            style={{ pointerEvents: 'none' }}
+          >
+            {/* Object hitboxes */}
+            {gameObjects.map((obj) =>
+              obj.address.map((addr) => {
+                const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+                const rowLetter = cleanAddr.charCodeAt(0);
+                const gridY = (rowLetter - 65) * cellSize;
+                const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
+
+                const hitboxX = gridX + obj.hitbox.x;
+                const hitboxY = gridY + obj.hitbox.y;
+
+                return (
+                  <rect
+                    key={`${obj.id}-${addr}`}
+                    x={hitboxX}
+                    y={hitboxY}
+                    width={obj.hitbox.width}
+                    height={obj.hitbox.height}
+                    fill="none"
+                    stroke={obj.isCollectible ? '#00FF00' : '#FF0000'}
+                    strokeWidth="2"
+                    opacity="0.7"
+                  />
+                );
+              })
+            )}
+          </svg>
+        )}
+
         {/* Character Layer */}
         {cellSize > 0 && (
           <Character
@@ -206,6 +242,7 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
             spawnAddress={levelData.characterSpawn}
             onHealthChange={handleHealthChange}
             onSpikeHit={handleSpikeHit}
+            showHitbox={showHitbox}
           />
         )}
       </div>

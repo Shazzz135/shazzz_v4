@@ -4,7 +4,7 @@ import Sandbox from './world/Sandbox';
 import LoadingScreen from './components/LoadingScreen';
 
 export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Disabled for now
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
