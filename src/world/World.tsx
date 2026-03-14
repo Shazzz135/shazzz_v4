@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import type { LevelData } from '../data/sandboxData';
+import { dungeonLevel } from '../data/levelSelectData';
 import { sandboxLevel } from '../data/sandboxData';
 import Character from '../components/Character';
 import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartHalf from '../assets/ui/heart/heart_half.svg';
 import heartEmpty from '../assets/ui/heart/heart_empty.svg';
-import type { GameObject } from '../types/GameObject';
 
 /**
  * Universal Level/Game Scene Component
@@ -13,10 +12,6 @@ import type { GameObject } from '../types/GameObject';
  * Can be reused for multiple levels by passing different levelData
  * Dynamically scales to fit screen while maintaining 30×16 grid layout
  */
-
-interface SandboxProps {
-  levelData?: LevelData;
-}
 
 // Converts grid address (e.g., "A1", "P16") to pixel coordinates
 const getPixelPositionFromAddress = (address: string, cellSize: number): { x: number; y: number } => {
@@ -28,7 +23,7 @@ const getPixelPositionFromAddress = (address: string, cellSize: number): { x: nu
   };
 };
 
-export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
+export default function World() {
   // ========== GRID CONFIGURATION ==========
   const gridCols = 30;
   const gridRows = 16;
@@ -36,12 +31,15 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
   
   // ========== STATE ==========
   const [cellSize, setCellSize] = useState(0);
-  const [gameObjects] = useState<GameObject[]>(levelData.objects);
+  const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('levelSelect');
+  const currentLevel = activeDataset === 'levelSelect' ? dungeonLevel : sandboxLevel;
+  const gameObjects = currentLevel.objects;
   const [objectFrames, setObjectFrames] = useState<Record<string, number>>({}); // Track frame indices for animations
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
   const [flickerState, setFlickerState] = useState(true); // Toggle for flicker animation
   const [showHitbox] = useState(false); // Debug: show hitboxes
+  const [showGrid, setShowGrid] = useState(true); // Toggle grid visibility
   const animationTickRef = useRef(0);
 
   useEffect(() => {
@@ -129,11 +127,37 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
     return heartEmpty;
   };
 
-  // Get A1 pixel position for heart display
-  const A1Position = getPixelPositionFromAddress('A1', cellSize);
+  // Get grid positions for heart display
+  const B2Position = getPixelPositionFromAddress('B2', cellSize);
+  const B3Position = getPixelPositionFromAddress('B3', cellSize);
+  const B4Position = getPixelPositionFromAddress('B4', cellSize);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
+    <div 
+      className="w-screen h-screen overflow-hidden flex items-center justify-center relative"
+      style={{
+        backgroundImage: currentLevel.background ? `url(${currentLevel.background})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundColor: '#000000',
+      }}
+    >
+      {/* Dataset Toggle Button */}
+      <button
+        onClick={() => setActiveDataset(activeDataset === 'levelSelect' ? 'sandbox' : 'levelSelect')}
+        className="absolute top-4 left-4 z-10 px-3 py-2 rounded font-bold text-sm bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+      >
+        {activeDataset === 'levelSelect' ? 'Level Select' : 'Sandbox'}
+      </button>
+
+      {/* Grid Toggle Button */}
+      <button
+        onClick={() => setShowGrid(!showGrid)}
+        className="absolute top-4 right-4 z-10 px-3 py-2 rounded font-bold text-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+      >
+        {showGrid ? 'Hide Grid' : 'Show Grid'}
+      </button>
+
       <div className="relative" style={{ width: gridCols * cellSize, height: gridRows * cellSize }}>
         {/* Game Objects Layer */}
         {cellSize > 0 && (
@@ -178,16 +202,106 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
             })}
           </div>
         )}
+
+        {/* Grid Layer */}
+        {cellSize > 0 && showGrid && (
+          <svg
+            className="absolute inset-0"
+            width={gridCols * cellSize}
+            height={gridRows * cellSize}
+            style={{ pointerEvents: 'none' }}
+          >
+            {/* Vertical grid lines */}
+            {Array.from({ length: gridCols + 1 }).map((_, i) => (
+              <line
+                key={`v-${i}`}
+                x1={i * cellSize}
+                y1={0}
+                x2={i * cellSize}
+                y2={gridRows * cellSize}
+                stroke="#666666"
+                strokeWidth="1"
+                opacity="0.5"
+              />
+            ))}
+            {/* Horizontal grid lines */}
+            {Array.from({ length: gridRows + 1 }).map((_, i) => (
+              <line
+                key={`h-${i}`}
+                x1={0}
+                y1={i * cellSize}
+                x2={gridCols * cellSize}
+                y2={i * cellSize}
+                stroke="#666666"
+                strokeWidth="1"
+                opacity="0.5"
+              />
+            ))}
+            {/* Grid labels */}
+            {Array.from({ length: gridRows }).map((_, row) =>
+              Array.from({ length: gridCols }).map((_, col) => {
+                const letter = String.fromCharCode(65 + row); // A-P
+                const number = col + 1; // 1-30
+                const address = `${letter}${number}`;
+                const x = col * cellSize + cellSize / 2;
+                const y = row * cellSize + cellSize / 2;
+                return (
+                  <text
+                    key={`label-${address}`}
+                    x={x}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#999999"
+                    fontSize={(cellSize * 0.4).toString()}
+                    opacity="0.6"
+                    pointerEvents="none"
+                  >
+                    {address}
+                  </text>
+                );
+              })
+            )}
+          </svg>
+        )}
+
         {/* UI Layer - Health Hearts */}
         {cellSize > 0 && (
           <div className="absolute inset-0">
+            {/* First heart at B2 - shows current health */}
             <img
               src={getHeartImage()}
-              alt="health"
+              alt="health-1"
               className="absolute"
               style={{
-                left: `${A1Position.x}px`,
-                top: `${A1Position.y}px`,
+                left: `${B2Position.x}px`,
+                top: `${B2Position.y}px`,
+                width: `${cellSize}px`,
+                height: `${cellSize}px`,
+                objectFit: 'contain',
+              }}
+            />
+            {/* Second heart at B3 - full heart */}
+            <img
+              src={heartFull}
+              alt="health-2"
+              className="absolute"
+              style={{
+                left: `${B3Position.x}px`,
+                top: `${B3Position.y}px`,
+                width: `${cellSize}px`,
+                height: `${cellSize}px`,
+                objectFit: 'contain',
+              }}
+            />
+            {/* Third heart at B4 - full heart */}
+            <img
+              src={heartFull}
+              alt="health-3"
+              className="absolute"
+              style={{
+                left: `${B4Position.x}px`,
+                top: `${B4Position.y}px`,
                 width: `${cellSize}px`,
                 height: `${cellSize}px`,
                 objectFit: 'contain',
@@ -239,7 +353,7 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
             gridWidth={gridCols}
             gridHeight={gridRows}
             scale={scale}
-            spawnAddress={levelData.characterSpawn}
+            spawnAddress={currentLevel.characterSpawn}
             onHealthChange={handleHealthChange}
             onSpikeHit={handleSpikeHit}
             showHitbox={showHitbox}

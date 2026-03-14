@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import Sandbox from './world/Sandbox';
+import World from './world/World';
 import LoadingScreen from './components/LoadingScreen';
 
 export default function App() {
@@ -13,7 +13,7 @@ export default function App() {
   return (
     <>
       <LoadingScreen isLoading={isLoading} levelName="Dungeon" onLoadingComplete={handleLoadingComplete} />
-      <Sandbox />
+      <World />
     </>
   );
 }
