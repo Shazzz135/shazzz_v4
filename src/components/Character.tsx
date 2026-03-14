@@ -320,7 +320,9 @@ export default function Character({
         if (isProneLockedByObstacle && !hasObstacle) {
           // Was locked, but now clear - unlock and auto-stand
           console.log('CHARACTER: Prone clearance - no overhead obstacles');
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsProneLockedByObstacle(false);
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsProne(false);
         } else if (!isProneLockedByObstacle && hasObstacle) {
           // Was unlocked, but now blocked - lock
@@ -336,6 +338,7 @@ export default function Character({
 
   // Update character size when scale changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       width: CHARACTER_WIDTH * scale * 0.95,
@@ -346,6 +349,7 @@ export default function Character({
   // Recalculate character position when cellSize changes to maintain relative grid position
   useEffect(() => {
     const newSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       x: newSpawnPos.x,
@@ -471,7 +475,9 @@ export default function Character({
 
     // Reset frame when animation state changes
     if (newAnimState !== animationState) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFrameIndex(0);
       animationTickRef.current = 0;
     }
