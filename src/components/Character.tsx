@@ -28,10 +28,20 @@ interface CharacterProps {
   gridWidth: number;
   gridHeight: number;
   scale: number;
-  spawnPosition?: { x: number; y: number }; // Character spawn position in pixels
+  spawnAddress?: string; // Character spawn position as grid address (e.g., "E8")
   onHealthChange?: (health: number) => void;
   onSpikeHit?: (spikeAddress: string) => void;
 }
+
+// Helper function to convert grid address to pixel coordinates
+const getPixelPositionFromAddress = (address: string, cellSize: number): { x: number; y: number } => {
+  const row = address.charCodeAt(0) - 65;
+  const col = parseInt(address.substring(1)) - 1;
+  return {
+    x: col * cellSize,
+    y: row * cellSize,
+  };
+};
 
 export default function Character({
   gameObjects,
@@ -39,14 +49,15 @@ export default function Character({
   gridWidth,
   gridHeight,
   scale,
-  spawnPosition = { x: cellSize * 2, y: cellSize * 5 },
+  spawnAddress = 'C5',
   onHealthChange,
   onSpikeHit,
 }: CharacterProps) {
   // ========== STATE ==========
+  const initialSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
   const [character, setCharacter] = useState<CharacterState>({
-    x: spawnPosition.x,
-    y: spawnPosition.y,
+    x: initialSpawnPos.x,
+    y: initialSpawnPos.y,
     velocityX: 0,
     velocityY: 0,
     width: CHARACTER_WIDTH * scale * 0.95,
@@ -331,6 +342,16 @@ export default function Character({
       height: CHARACTER_HEIGHT * scale * 0.95,
     }));
   }, [scale]);
+
+  // Recalculate character position when cellSize changes to maintain relative grid position
+  useEffect(() => {
+    const newSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
+    setCharacter((prev) => ({
+      ...prev,
+      x: newSpawnPos.x,
+      y: newSpawnPos.y,
+    }));
+  }, [cellSize, spawnAddress]);
 
   // Game loop with physics and movement
   useEffect(() => {

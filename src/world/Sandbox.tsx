@@ -203,7 +203,7 @@ export default function Sandbox({ levelData = sandboxLevel }: SandboxProps) {
             gridWidth={gridCols}
             gridHeight={gridRows}
             scale={scale}
-            spawnPosition={getPixelPositionFromAddress(levelData.characterSpawn, cellSize)}
+            spawnAddress={levelData.characterSpawn}
             onHealthChange={handleHealthChange}
             onSpikeHit={handleSpikeHit}
           />
