@@ -5,10 +5,12 @@
  */
 import type { GameObject } from '../types/GameObject';
 import grassFull from '/world/blocks/grass_full.svg';
+import dungeon from '../assets/backgrounds/dungeon.webp';
 
 export interface LevelData {
   objects: GameObject[];
   characterSpawn: string; // Grid address (e.g., "D8")
+  background?: string; // Background image (optional)
 }
 
 export const sandboxLevel: LevelData = {
@@ -22,5 +24,6 @@ export const sandboxLevel: LevelData = {
       address: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'N7'],
     },
   ],
-  characterSpawn: 'B8', // Spawn at grid position E8
+  characterSpawn: 'B8',
+  background: dungeon,
 };
