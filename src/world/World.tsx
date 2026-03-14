@@ -34,7 +34,7 @@ export default function World() {
   const [cellSize, setCellSize] = useState(0);
   const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('levelSelect');
   const currentLevel = activeDataset === 'levelSelect' ? dungeonLevel : sandboxLevel;
-  const [gameObjects, setGameObjects] = useState<GameObject[]>(currentLevel.objects);
+  const gameObjects = currentLevel.objects;
   const [objectFrames, setObjectFrames] = useState<Record<string, number>>({}); // Track frame indices for animations
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
@@ -43,12 +43,11 @@ export default function World() {
   const [showGrid, setShowGrid] = useState(true); // Toggle grid visibility
   const animationTickRef = useRef(0);
 
-  // Update gameObjects when active dataset changes
+  // Reset state when active dataset changes
   useEffect(() => {
-    setGameObjects(currentLevel.objects);
     setObjectFrames({}); // Reset animation frames
     setHealth(1); // Reset health
-  }, [activeDataset, currentLevel]);
+  }, [activeDataset]);
 
   useEffect(() => {
     const calculateCellSize = () => {
