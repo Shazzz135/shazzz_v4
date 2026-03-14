@@ -5,7 +5,6 @@ import Character from '../components/Character';
 import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartHalf from '../assets/ui/heart/heart_half.svg';
 import heartEmpty from '../assets/ui/heart/heart_empty.svg';
-import type { GameObject } from '../types/GameObject';
 
 /**
  * Universal Level/Game Scene Component
@@ -42,12 +41,6 @@ export default function World() {
   const [showHitbox] = useState(false); // Debug: show hitboxes
   const [showGrid, setShowGrid] = useState(true); // Toggle grid visibility
   const animationTickRef = useRef(0);
-
-  // Reset state when active dataset changes
-  useEffect(() => {
-    setObjectFrames({}); // Reset animation frames
-    setHealth(1); // Reset health
-  }, [activeDataset]);
 
   useEffect(() => {
     const calculateCellSize = () => {
