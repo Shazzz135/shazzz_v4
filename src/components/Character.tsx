@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GameObject } from '../types/GameObject';
 import {
   ANIMATION_FRAMES,
@@ -75,6 +75,7 @@ export default function Character({
   const [isProneLockedByObstacle, setIsProneLockedByObstacle] = useState(false);
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [isInvulnerable, setIsInvulnerable] = useState(false);
+  const [flickerState, setFlickerState] = useState(true); // Controls flicker visibility during immunity
 
   // ========== REFS ==========
   const keysPressed = useRef<Record<string, boolean>>({});
@@ -83,12 +84,11 @@ export default function Character({
   const lastGridPositionRef = useRef<Array<{ x: number; y: number }>>([]);
   const isProneLockedRef = useRef(false); // Sync lock state for keyboard events
   const invulnerabilityEndRef = useRef<number | null>(null); // Timestamp when invulnerability ends
-  const flickerRef = useRef(true); // Controls flicker visibility state
   const recentlyHitSpikesRef = useRef<Set<string>>(new Set()); // Track recently hit spike addresses
   const lastSpikeHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time for each spike (3 second cooldown)
 
   // Helper function to get all grid cells occupied by character's hitbox
-  const getOccupiedGridCells = (char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
+  const getOccupiedGridCells = useCallback((char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
     const config = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
     const hitboxLeft = char.x + config.offsetX;
     const hitboxRight = hitboxLeft + config.width;
@@ -109,10 +109,10 @@ export default function Character({
       }
     }
     return cells;
-  };
+  }, [cellSize, gridWidth, gridHeight]);
 
   // Helper function to check for overhead obstacles
-  const checkForOverheadObstacle = (char: CharacterState, currentAnimState: AnimationState): boolean => {
+  const checkForOverheadObstacle = useCallback((char: CharacterState, currentAnimState: AnimationState): boolean => {
     const standingConfig = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
     const testHitbox = {
       x: char.x + standingConfig.offsetX,
@@ -154,10 +154,10 @@ export default function Character({
       }
     }
     return false; // No obstacle
-  };
+  }, [gameObjects, cellSize]);
 
   // Helper function to check for spike collision and deal damage
-  const checkSpikeDamage = (char: CharacterState, currentAnimState: AnimationState) => {
+  const checkSpikeDamage = useCallback((char: CharacterState, currentAnimState: AnimationState) => {
     if (isInvulnerable) return; // Skip if already invulnerable
 
     const config = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
@@ -223,14 +223,14 @@ export default function Character({
           // Start invulnerability
           setIsInvulnerable(true);
           invulnerabilityEndRef.current = Date.now() + 3000; // 3 second immunity
-          flickerRef.current = true;
+          setFlickerState(true);
         }
       }
     }
-  };
+  }, [isInvulnerable, gameObjects, cellSize, scale, onSpikeHit]);
 
   // ========== INPUT HANDLING ==========
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
     keysPressed.current[key] = true;
 
@@ -245,7 +245,7 @@ export default function Character({
       console.log('CHARACTER: Entering prone');
       setIsProne(true);
     }
-  };
+  }, [isProne, scale, character.onGround, character.velocityX]);
 
   const handleKeyUp = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
@@ -273,13 +273,13 @@ export default function Character({
     if (!isInvulnerable) return;
 
     const flickerInterval = setInterval(() => {
-      flickerRef.current = !flickerRef.current;
+      setFlickerState((prev) => !prev);
     }, 200); // Toggle flicker every 200ms
 
     const invulnerabilityInterval = setInterval(() => {
       if (invulnerabilityEndRef.current && Date.now() >= invulnerabilityEndRef.current) {
         setIsInvulnerable(false);
-        flickerRef.current = true;
+        setFlickerState(true);
         invulnerabilityEndRef.current = null;
         console.log('IMMUNITY: Invulnerability ended');
       }
@@ -536,7 +536,7 @@ export default function Character({
           objectFit: 'contain',
           transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
           pointerEvents: 'none',
-          opacity: isInvulnerable && !flickerRef.current ? 0 : 1, // Flicker during immunity
+          opacity: isInvulnerable && !flickerState ? 0 : 1, // Flicker during immunity
           transition: 'opacity 0.05s', // Smooth opacity changes
         }}
       />
