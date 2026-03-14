@@ -29,6 +29,7 @@ interface CharacterProps {
   gridHeight: number;
   scale: number;
   spawnAddress?: string; // Character spawn position as grid address (e.g., "E8")
+  showHitbox?: boolean; // Debug: show character hitbox
   onHealthChange?: (health: number) => void;
   onSpikeHit?: (spikeAddress: string) => void;
 }
@@ -50,6 +51,7 @@ export default function Character({
   gridHeight,
   scale,
   spawnAddress = 'C5',
+  showHitbox = false,
   onHealthChange,
   onSpikeHit,
 }: CharacterProps) {
@@ -237,7 +239,7 @@ export default function Character({
     if (key === 'w' && !isProne) {
       setCharacter((prev) => jump(prev, scale));
     }
-    if (key === ' ' && character.onGround && character.velocityX === 0 && !keysPressed.current['a'] && !keysPressed.current['d']) {
+    if (key === ' ' && character.onGround && character.velocityX === 0 && !keysPressed.current['a'] && !keysPressed.current['d'] && !isProne) {
       setIsPunching(true);
       e.preventDefault();
     }
@@ -315,15 +317,22 @@ export default function Character({
         
         // Check for overhead obstacle using standing hitbox (idle)
         const hasObstacle = checkForOverheadObstacle(character, 'idle');
+        const isHoldingProneKey = keysPressed.current['s'];
         
         // Update lock state based on current state and what we found
         if (isProneLockedByObstacle && !hasObstacle) {
-          // Was locked, but now clear - unlock and auto-stand
+          // Was locked, but now clear - unlock
           console.log('CHARACTER: Prone clearance - no overhead obstacles');
           // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsProneLockedByObstacle(false);
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setIsProne(false);
+          // Auto-stand only if NOT holding 's'
+          if (!isHoldingProneKey) {
+            console.log('CHARACTER: Standing up (not holding prone key)');
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setIsProne(false);
+          } else {
+            console.log('CHARACTER: Staying prone (holding prone key)');
+          }
         } else if (!isProneLockedByObstacle && hasObstacle) {
           // Was unlocked, but now blocked - lock
           console.log('CHARACTER: Overhead obstacle - prone is now locked');
@@ -546,6 +555,29 @@ export default function Character({
           transition: 'opacity 0.05s', // Smooth opacity changes
         }}
       />
+      {showHitbox && (
+        <svg
+          className="absolute"
+          style={{
+            left: '0px',
+            top: '0px',
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+          }}
+        >
+          <rect
+            x={character.x + HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].offsetX * scale * 0.95}
+            y={character.y + HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].offsetY * scale * 0.95}
+            width={HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].width * scale * 0.95}
+            height={HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].height * scale * 0.95}
+            fill="none"
+            stroke="#0000FF"
+            strokeWidth="2"
+            opacity="0.7"
+          />
+        </svg>
+      )}
     </>
   );
 }
