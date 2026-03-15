@@ -1,0 +1,102 @@
+import type { GameObject } from '../types/GameObject';
+import { getCleanAddress, getRotationAngle, isFlipped } from '../utils/addressParser';
+
+interface InputObjectProps {
+  object: GameObject;
+  address: string;
+  cellSize: number;
+  isActivated?: boolean; // Whether button is currently activated
+  frameIndex?: number; // Current frame index for button animation
+  showHitbox?: boolean;
+}
+
+/**
+ * InputObject Component
+ * Renders input objects (buttons) that trigger actions
+ * Examples: blue, green, red buttons
+ * 
+ * Button states:
+ * - Inactive: frame 0
+ * - Pressed: frame 1-2
+ * - Released: frame 3
+ */
+export default function InputObject({
+  object,
+  address,
+  cellSize,
+  isActivated = false,
+  frameIndex = 0,
+  showHitbox = false,
+}: InputObjectProps) {
+  // Convert grid address to pixel coordinates
+  const getPixelPosition = (addr: string): { x: number; y: number } => {
+    const cleanAddr = getCleanAddress(addr);
+    const row = cleanAddr.charCodeAt(0) - 65;
+    const col = parseInt(cleanAddr.substring(1)) - 1;
+    return {
+      x: col * cellSize,
+      y: row * cellSize,
+    };
+  };
+
+  const hasFlip = isFlipped(address);
+  const rotation = getRotationAngle(address);
+  const pos = getPixelPosition(address);
+
+  // Build transform string for flip and rotation
+  let transformStr = '';
+  if (hasFlip) {
+    transformStr += 'scaleX(-1) ';
+  }
+  if (rotation > 0) {
+    transformStr += `rotate(${rotation}deg) `;
+  }
+  transformStr = transformStr.trim() || 'none';
+
+  // Determine which frame to display
+  // When not activated: frame 0
+  // When activated: use frameIndex to animate through frames 0->1->2->3
+  const displayFrame = object.animation
+    ? object.animation.frames[frameIndex] || object.animation.frames[0]
+    : object.img;
+
+  return (
+    <>
+      {/* Button image */}
+      <img
+        src={displayFrame}
+        alt={object.id}
+        style={{
+          position: 'absolute',
+          left: `${pos.x}px`,
+          top: `${pos.y}px`,
+          width: `${cellSize}px`,
+          height: `${cellSize}px`,
+          imageRendering: 'pixelated',
+          userSelect: 'none',
+          pointerEvents: 'none',
+          opacity: isActivated ? 0.7 : 1,
+          filter: isActivated ? 'brightness(1.2)' : 'none',
+          transform: transformStr,
+          transformOrigin: 'center center',
+        }}
+      />
+
+      {/* Debug hitbox visualization */}
+      {showHitbox && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${pos.x + (object.hitbox.x * cellSize / 32)}px`,
+            top: `${pos.y + (object.hitbox.y * cellSize / 32)}px`,
+            width: `${object.hitbox.width * cellSize / 32}px`,
+            height: `${object.hitbox.height * cellSize / 32}px`,
+            border: '2px solid cyan',
+            boxSizing: 'border-box',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+    </>
+  );
+}

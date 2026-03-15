@@ -4,6 +4,10 @@ import { sandboxLevel } from '../data/sandboxData';
 import Character from '../components/Character';
 import MobileControls from '../components/MobileControls';
 import RotateDeviceScreen from '../components/RotateDeviceScreen';
+import BlockObject from '../objects/BlockObject';
+import AnimatedObject from '../objects/AnimatedObject';
+import InputObject from '../objects/InputObject';
+import OutputObject from '../objects/OutputObject';
 import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartHalf from '../assets/ui/heart/heart_half.svg';
 import heartEmpty from '../assets/ui/heart/heart_empty.svg';
@@ -33,15 +37,20 @@ export default function World() {
   
   // ========== STATE ==========
   const [cellSize, setCellSize] = useState(0);
-  const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('levelSelect');
+  const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('sandbox');
   const currentLevel = activeDataset === 'levelSelect' ? dungeonLevel : sandboxLevel;
   const gameObjects = currentLevel.objects;
   const [objectFrames, setObjectFrames] = useState<Record<string, number>>({}); // Track frame indices for animations
+  const [activatedSwitches, setActivatedSwitches] = useState<Set<string>>(new Set()); // Track which switches are activated
+  const [openedDoors, setOpenedDoors] = useState<Set<string>>(new Set()); // Track which doors are open
+  const [buttonAnimationFrames, setButtonAnimationFrames] = useState<Record<string, number>>({}); // Track button animation frames during activation
+  const [doorAnimationFrames, setDoorAnimationFrames] = useState<Record<string, number>>({}); // Track door animation frames during activation
+  const [completedDoors, setCompletedDoors] = useState<Set<string>>(new Set()); // Track doors that finished animating and should disappear
+  const [doorAnimationDirection, setDoorAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for doors
+  const [buttonAnimationDirection, setButtonAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for buttons
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
-  const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
-  const [flickerState, setFlickerState] = useState(true); // Toggle for flicker animation
   const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
-  const [showGrid, setShowGrid] = useState(true); // Toggle grid visibility
+  const [showGrid, setShowGrid] = useState(false); // Toggle grid visibility
   const animationTickRef = useRef(0);
 
   useEffect(() => {
@@ -62,21 +71,97 @@ export default function World() {
     const animationLoop = setInterval(() => {
       animationTickRef.current += 1;
       
-      // Update frame indices for animated objects
+      // Update frame indices for animated objects only (not input/output)
       const newFrames: Record<string, number> = {};
+      const newButtonFrames: Record<string, number> = {};
+      const newDoorFrames: Record<string, number> = {};
+      const newCompletedDoors = new Set(completedDoors);
+      const newButtonDirection: Record<string, 'forward' | 'backward'> = { ...buttonAnimationDirection };
+      const newDoorDir: Record<string, 'forward' | 'backward' | null> = { ...doorAnimationDirection };
+      
+      
       gameObjects.forEach((obj) => {
         if (obj.animation) {
           obj.address.forEach((addr) => {
             const key = `${obj.id}-${addr}`;
-            const currentFrame = objectFrames[key] ?? 0;
-            const animSpeed = obj.animation!.speed;
-            const frameCount = obj.animation!.frames.length;
             
-            // Update frame every animSpeed ticks
-            if (animationTickRef.current % animSpeed === 0) {
-              newFrames[key] = (currentFrame + 1) % frameCount;
+            if (obj.type === 'input') {
+              // Handle button animation
+              if (activatedSwitches.has(obj.id)) {
+                const currentFrame = buttonAnimationFrames[key] ?? 0;
+                const animSpeed = obj.animation!.speed;
+                const frameCount = obj.animation!.frames.length;
+                const maxFrame = frameCount - 1; // Frame 3 for 4-frame buttons (indices 0-3)
+                
+                // Animate forward through frames: 0->1->2->3, then stop at 3
+                if (animationTickRef.current % animSpeed === 0 && currentFrame < maxFrame) {
+                  newButtonFrames[key] = currentFrame + 1;
+                } else {
+                  newButtonFrames[key] = currentFrame;
+                }
+              } else if (buttonAnimationDirection[obj.id] === 'backward') {
+                // Button deactivated - animate backward through frames: 3->2->1->0
+                const currentFrame = buttonAnimationFrames[key] ?? 0;
+                const animSpeed = obj.animation!.speed;
+                
+                if (animationTickRef.current % animSpeed === 0 && currentFrame > 0) {
+                  newButtonFrames[key] = currentFrame - 1;
+                } else if (currentFrame === 0) {
+                  // Animation complete, clear the direction
+                  delete newButtonDirection[obj.id];
+                  newButtonFrames[key] = 0;
+                } else {
+                  newButtonFrames[key] = currentFrame;
+                }
+              } else {
+                // Not animated, stay at frame 0
+                newButtonFrames[key] = 0;
+              }
+            } else if (obj.type === 'output') {
+              // Handle door animation
+              if (openedDoors.has(obj.id) && !completedDoors.has(obj.id)) {
+                // Door is opening
+                const currentFrame = doorAnimationFrames[key] ?? 0;
+                const animSpeed = obj.animation!.speed;
+                const frameCount = obj.animation!.frames.length;
+                
+                // Animate forward through frames: 0->1->2->3
+                if (animationTickRef.current % animSpeed === 0 && currentFrame < frameCount - 1) {
+                  newDoorFrames[key] = currentFrame + 1;
+                } else if (currentFrame === frameCount - 1) {
+                  // Animation complete - mark door as completed
+                  newCompletedDoors.add(obj.id);
+                  newDoorFrames[key] = currentFrame;
+                } else {
+                  newDoorFrames[key] = currentFrame;
+                }
+              } else if (doorAnimationDirection[obj.id] === 'backward') {
+                // Door is closing - animate backward through frames: 3->2->1->0
+                const currentFrame = doorAnimationFrames[key] ?? 0;
+                const animSpeed = obj.animation!.speed;
+                
+                if (animationTickRef.current % animSpeed === 0 && currentFrame > 0) {
+                  newDoorFrames[key] = currentFrame - 1;
+                } else if (currentFrame === 0) {
+                  // Animation complete, clear the direction
+                  delete newDoorDir[obj.id];
+                  newDoorFrames[key] = 0;
+                } else {
+                  newDoorFrames[key] = currentFrame;
+                }
+              }
             } else {
-              newFrames[key] = currentFrame;
+              // Regular animated objects
+              const currentFrame = objectFrames[key] ?? 0;
+              const animSpeed = obj.animation!.speed;
+              const frameCount = obj.animation!.frames.length;
+              
+              // Update frame every animSpeed ticks
+              if (animationTickRef.current % animSpeed === 0) {
+                newFrames[key] = (currentFrame + 1) % frameCount;
+              } else {
+                newFrames[key] = currentFrame;
+              }
             }
           });
         }
@@ -85,10 +170,29 @@ export default function World() {
       if (Object.keys(newFrames).length > 0) {
         setObjectFrames((prev) => ({ ...prev, ...newFrames }));
       }
+      if (Object.keys(newButtonFrames).length > 0) {
+        setButtonAnimationFrames((prev) => ({ ...prev, ...newButtonFrames }));
+      }
+      if (Object.keys(newDoorFrames).length > 0) {
+        setDoorAnimationFrames((prev) => ({ ...prev, ...newDoorFrames }));
+      }
+      if (newCompletedDoors.size > completedDoors.size) {
+        setCompletedDoors(newCompletedDoors);
+      }
+      if (Object.keys(newButtonDirection).length > 0) {
+        setButtonAnimationDirection(newButtonDirection);
+      }
+      // Clean up newDoorDir by removing null/undefined values
+      const cleanedDoorDir = Object.fromEntries(
+        Object.entries(newDoorDir).filter(([, v]) => v !== null && v !== undefined)
+      ) as Record<string, 'forward' | 'backward'>;
+      if (Object.keys(cleanedDoorDir).length > 0) {
+        setDoorAnimationDirection(cleanedDoorDir);
+      }
     }, 16); // ~60 FPS
     
     return () => clearInterval(animationLoop);
-  }, [gameObjects, objectFrames]);
+  }, [gameObjects, objectFrames, buttonAnimationFrames, doorAnimationFrames, activatedSwitches, openedDoors, completedDoors]);
 
   const scale = cellSize > 0 ? cellSize / BASE_CELL_SIZE : 1;
 
@@ -96,31 +200,112 @@ export default function World() {
     setHealth(newHealth);
   };
 
-  const handleSpikeHit = (spikeAddress: string) => {
-    setRecentlyHitSpikes((prev) => {
-      const newSet = new Set(prev);
-      newSet.add(spikeAddress);
-      return newSet;
-    });
+  // Handle switch activation/deactivation
+  const handleSwitchActivation = (switchObjectId: string) => {
+    const switchObj = gameObjects.find((obj) => obj.id === switchObjectId);
+    if (!switchObj) return;
 
-    // Remove spike from flicker set after 300ms
-    setTimeout(() => {
-      setRecentlyHitSpikes((prev) => {
+    const switchKey = switchObjectId;
+    
+    if (activatedSwitches.has(switchKey)) {
+      // Button is already activated - deactivate it
+      setActivatedSwitches((prev) => {
         const newSet = new Set(prev);
-        newSet.delete(spikeAddress);
+        newSet.delete(switchKey);
         return newSet;
       });
-    }, 300);
+
+      // Initialize button frames to maxFrame and set direction to backward
+      // This ensures the button animates backward from fully pressed (frame 3) to unpressed (frame 0)
+      if (switchObj.animation) {
+        const frameCount = switchObj.animation.frames.length;
+        const maxFrame = frameCount - 1; // Frame 3 for 4-frame buttons
+
+        switchObj.address.forEach((addr) => {
+          const key = `${switchObj.id}-${addr}`;
+          setButtonAnimationFrames((prev) => ({
+            ...prev,
+            [key]: maxFrame, // Start from frame 3 (fully pressed)
+          }));
+        });
+      }
+
+      // Set animation direction to backward
+      setButtonAnimationDirection((prev) => ({
+        ...prev,
+        [switchObjectId]: 'backward',
+      }));
+
+      // Close the linked door
+      if (switchObj.linkedObjectId) {
+        setOpenedDoors((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(switchObj.linkedObjectId!);
+          return newSet;
+        });
+        // Start door closing animation (play in reverse: 3->2->1->0)
+        const doorObj = gameObjects.find((obj) => obj.id === switchObj.linkedObjectId);
+        if (doorObj && doorObj.animation) {
+          const frameCount = doorObj.animation.frames.length;
+          const maxFrame = frameCount - 1; // Frame 3 for 4-frame doors
+          
+          // Initialize all door instances to max frame and set direction to backward
+          doorObj.address.forEach((addr) => {
+            const key = `${doorObj.id}-${addr}`;
+            setDoorAnimationFrames((prev) => ({
+              ...prev,
+              [key]: maxFrame, // Start from frame 3 (fully opened)
+            }));
+          });
+          
+          // Set animation direction to backward
+          setDoorAnimationDirection((prev) => ({
+            ...prev,
+            [switchObj.linkedObjectId as string]: 'backward',
+          }));
+          
+          // Remove from completed doors so it renders during animation
+          setCompletedDoors((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(doorObj.id);
+            return newSet;
+          });
+        }
+      }
+    } else {
+      // Button is not activated - activate it
+      setActivatedSwitches((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(switchKey);
+        return newSet;
+      });
+
+      // Initialize button frames to 0 (unpressed state) and set direction to forward
+      // This ensures the button animates forward from unpressed (frame 0) to fully pressed (frame 3)
+      switchObj.address.forEach((addr) => {
+        const key = `${switchObj.id}-${addr}`;
+        setButtonAnimationFrames((prev) => ({
+          ...prev,
+          [key]: 0, // Start at frame 0 (unpressed)
+        }));
+      });
+
+      // Set animation direction to forward and start animating immediately
+      setButtonAnimationDirection((prev) => ({
+        ...prev,
+        [switchObjectId]: 'forward',
+      }));
+
+      // Find the linked door and activate it
+      if (switchObj.linkedObjectId) {
+        setOpenedDoors((prev) => {
+          const newSet = new Set(prev);
+          newSet.add(switchObj.linkedObjectId!);
+          return newSet;
+        });
+      }
+    }
   };
-
-  // Flicker effect for hit spikes
-  useEffect(() => {
-    const flickerInterval = setInterval(() => {
-      setFlickerState((prev) => !prev);
-    }, 100); // Toggle every 100ms for visible flicker
-
-    return () => clearInterval(flickerInterval);
-  }, []);
 
   // Determine which heart image to display based on health
   const getHeartImage = (): string => {
@@ -176,40 +361,61 @@ export default function World() {
           <div className="absolute inset-0">
             {gameObjects.map((obj) => {
               return obj.address.map((addr) => {
-                const isFlipped = addr.endsWith('R');
-                const cleanAddr = isFlipped ? addr.slice(0, -1) : addr;
-                const pixelPos = getPixelPositionFromAddress(cleanAddr, cellSize);
-                const scaledSize = cellSize;
                 const key = `${obj.id}-${addr}`;
+                const frameIndex = objectFrames[key] ?? 0;
 
-                // Get current frame if animated, otherwise use static image
-                let imageSrc = obj.img || '';
-                if (obj.animation) {
-                  const frameIndex = objectFrames[key] ?? 0;
-                  imageSrc = obj.animation.frames[frameIndex];
+                // Render appropriate component based on object type
+                switch (obj.type) {
+                  case 'block':
+                    return (
+                      <BlockObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  case 'animated':
+                    return (
+                      <AnimatedObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        frameIndex={frameIndex}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  case 'input':
+                    return (
+                      <InputObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        isActivated={activatedSwitches.has(obj.id)}
+                        frameIndex={buttonAnimationFrames[key] ?? 0}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  case 'output':
+                    return (
+                      <OutputObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        isActivated={openedDoors.has(obj.id)}
+                        frameIndex={doorAnimationFrames[key] ?? 0}
+                        isCompleted={completedDoors.has(obj.id)}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  default:
+                    console.warn(`Unknown object type: ${obj.type}`);
+                    return null;
                 }
-
-                return (
-                  <img
-                    key={key}
-                    src={imageSrc}
-                    alt={obj.id}
-                    className="absolute"
-                    style={{
-                      left: `${pixelPos.x}px`,
-                      top: `${pixelPos.y}px`,
-                      width: `${scaledSize}px`,
-                      height: `${scaledSize}px`,
-                      objectFit: 'contain',
-                      transform: isFlipped ? 'scaleX(-1)' : 'none',
-                      opacity: obj.id === 'spikes' && recentlyHitSpikes.has(addr) && !flickerState ? 0.3 : 1,
-                      transition: 'opacity 0.05s',
-                    }}
-                    onError={(e) => {
-                      console.error(`Failed to load image: ${imageSrc}`, e);
-                    }}
-                  />
-                );
               });
             })}
           </div>
@@ -375,7 +581,8 @@ export default function World() {
             scale={scale}
             spawnAddress={currentLevel.characterSpawn}
             onHealthChange={handleHealthChange}
-            onSpikeHit={handleSpikeHit}
+            onButtonPress={handleSwitchActivation}
+            openedDoors={openedDoors}
             showHitbox={showHitbox}
           />
         )}

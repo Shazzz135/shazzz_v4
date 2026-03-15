@@ -16,6 +16,7 @@ import {
   moveRight,
   stopMoving,
 } from '../utils/physics';
+import { getCleanAddress } from '../utils/addressParser';
 
 /**
  * Character component - Manages player character rendering, animation, input handling, and physics
@@ -32,6 +33,8 @@ interface CharacterProps {
   showHitbox?: boolean; // Debug: show character hitbox
   onHealthChange?: (health: number) => void;
   onSpikeHit?: (spikeAddress: string) => void;
+  onButtonPress?: (buttonObjectId: string) => void; // Called when character collides with input object
+  openedDoors?: Set<string>; // Track which doors are currently opened
 }
 
 // Helper function to convert grid address to pixel coordinates
@@ -54,6 +57,8 @@ export default function Character({
   showHitbox = false,
   onHealthChange,
   onSpikeHit,
+  onButtonPress,
+  openedDoors = new Set(),
 }: CharacterProps) {
   // ========== STATE ==========
   const initialSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
@@ -88,6 +93,7 @@ export default function Character({
   const invulnerabilityEndRef = useRef<number | null>(null); // Timestamp when invulnerability ends
   const recentlyHitSpikesRef = useRef<Set<string>>(new Set()); // Track recently hit spike addresses
   const lastSpikeHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time for each spike (3 second cooldown)
+  const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set()); // Track buttons character is currently overlapping (requires re-entry to press again)
 
   // Helper function to get all grid cells occupied by character's hitbox
   const getOccupiedGridCells = useCallback((char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
@@ -141,7 +147,7 @@ export default function Character({
     
     for (const obj of gameObjects) {
       for (const addr of obj.address) {
-        const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+        const cleanAddr = getCleanAddress(addr);
         const rowLetter = cleanAddr.charCodeAt(0);
         
         if (rowLetter >= 80) continue; // Skip P layer and below
@@ -195,7 +201,7 @@ export default function Character({
       if (obj.id !== 'spikes') continue;
 
       for (const addr of obj.address) {
-        const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+        const cleanAddr = getCleanAddress(addr);
         const rowLetter = cleanAddr.charCodeAt(0);
         const gridY = (rowLetter - 65) * cellSize;
         const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
@@ -256,6 +262,79 @@ export default function Character({
       }
     }
   }, [isInvulnerable, gameObjects, cellSize, scale, onSpikeHit]);
+
+  // Helper function to check for button collision and trigger button press
+  // Only activates when character is standing ON TOP of the button, not from sides
+  // Buttons at stage 4 (frame 3) can be pressed again to deactivate - character can walk through them
+  // Button press is based purely on character position, not animation state (prevents retriggering on animation changes)
+  const checkButtonPress = useCallback((char: CharacterState) => {
+    // Use character's base position with a simple collision box (not animation-dependent)
+    // This ensures animation changes don't cause the overlap detection to flip
+    const charBaseHitbox = {
+      x: char.x,
+      y: char.y,
+      right: char.x + char.width,
+      bottom: char.y + char.height,
+    };
+
+    // Track buttons currently overlapping this frame
+    const currentlyOverlappingThisFrame = new Set<string>();
+
+    // Find input objects (buttons) and check for collision
+    for (const obj of gameObjects) {
+      if (obj.type !== 'input') continue;
+
+      let isOverlappingAnyInstance = false;
+
+      for (const addr of obj.address) {
+        const cleanAddr = getCleanAddress(addr);
+        const rowLetter = cleanAddr.charCodeAt(0);
+        const gridY = (rowLetter - 65) * cellSize;
+        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
+
+        // Scale button hitbox to match current cellSize
+        const HITBOX_BASE_SIZE = 32;
+        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+        const scaledWidth = obj.hitbox.width * scaleFactor;
+        const scaledHeight = obj.hitbox.height * scaleFactor;
+        const scaledOffsetX = obj.hitbox.x * scaleFactor;
+        const scaledOffsetY = obj.hitbox.y * scaleFactor;
+
+        // Get button hitbox
+        const buttonHitbox = {
+          x: gridX + scaledOffsetX,
+          y: gridY + scaledOffsetY,
+          right: gridX + scaledOffsetX + scaledWidth,
+          bottom: gridY + scaledOffsetY + scaledHeight,
+        };
+
+        // Check collision: character hitbox must overlap with button hitbox (full AABB collision)
+        // This is the ONLY trigger condition - character must touch the actual blue hitbox rectangle
+        const colliding = 
+          charBaseHitbox.x < buttonHitbox.right &&
+          charBaseHitbox.right > buttonHitbox.x &&
+          charBaseHitbox.y < buttonHitbox.bottom &&
+          charBaseHitbox.bottom > buttonHitbox.y;
+
+        if (colliding) {
+          isOverlappingAnyInstance = true;
+        }
+      }
+
+      // If overlapping any instance of this button, track it
+      if (isOverlappingAnyInstance) {
+        currentlyOverlappingThisFrame.add(obj.id);
+
+        // Only trigger button press if we weren't already overlapping this button
+        if (!currentlyOverlappingButtonsRef.current.has(obj.id)) {
+          onButtonPress?.(obj.id);
+        }
+      }
+    }
+
+    // Update the currently overlapping buttons for next frame
+    currentlyOverlappingButtonsRef.current = currentlyOverlappingThisFrame;
+  }, [gameObjects, cellSize, onButtonPress]);
 
   // ========== INPUT HANDLING ==========
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -457,7 +536,8 @@ export default function Character({
           gridWidth,
           gridHeight,
           scaledHitboxConfig,
-          scale
+          scale,
+          openedDoors
         );
 
         // Check if landed
@@ -467,6 +547,9 @@ export default function Character({
 
         // Check for spike damage
         checkSpikeDamage(newChar, physicsAnimState);
+
+        // Check for button press
+        checkButtonPress(newChar);
 
         return newChar;
       });
@@ -485,7 +568,7 @@ export default function Character({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown]);
+  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, checkButtonPress, handleKeyDown]);
 
   // Animation state machine and frame updates
   useEffect(() => {
