@@ -1,5 +1,6 @@
 import type { GameObject } from '../types/GameObject';
 import type { CharacterHitbox } from '../constants/hitboxes';
+import { getCleanAddress } from './addressParser';
 
 /**
  * Physics engine for character movement, gravity, and collision detection
@@ -107,7 +108,8 @@ export const checkIfOnGround = (
   character: CharacterState,
   gameObjects: GameObject[],
   cellSize: number,
-  hitboxConfig?: CharacterHitbox
+  hitboxConfig?: CharacterHitbox,
+  openedDoors: Set<string> = new Set()
 ): boolean => {
   const charHitbox = getCharacterHitbox(character, hitboxConfig);
   
@@ -122,11 +124,13 @@ export const checkIfOnGround = (
 
   // Check collision with all game objects
   for (const obj of gameObjects) {
-    // Skip collectible objects (no collision)
-    if (obj.isCollectible) continue;
+    // Skip collectible objects, input objects (buttons)
+    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip output objects (doors) only if they are opened
+    if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       // Check if character is standing on object (forgiving threshold for hitbox transitions)
@@ -149,7 +153,8 @@ export const snapCharacterToSurface = (
   gameObjects: GameObject[],
   cellSize: number,
   gridHeight: number,
-  hitboxConfig?: CharacterHitbox
+  hitboxConfig?: CharacterHitbox,
+  openedDoors: Set<string> = new Set()
 ): CharacterState => {
   const newChar = { ...character };
   const charHitbox = getCharacterHitbox(newChar, hitboxConfig);
@@ -169,11 +174,13 @@ export const snapCharacterToSurface = (
   let shouldSnap = false;
 
   for (const obj of gameObjects) {
-    // Skip collectible objects (no collision)
-    if (obj.isCollectible) continue;
+    // Skip collectible objects, input objects (buttons)
+    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip output objects (doors) only if they are opened
+    if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       // Check if character is over this object (with more lenient X overlap)
@@ -213,7 +220,8 @@ export const checkSideCollision = (
   character: CharacterState,
   gameObjects: GameObject[],
   cellSize: number,
-  hitboxConfig?: CharacterHitbox
+  hitboxConfig?: CharacterHitbox,
+  openedDoors: Set<string> = new Set()
 ): boolean => {
   const testChar = { ...character };
   
@@ -225,11 +233,13 @@ export const checkSideCollision = (
 
   // Check collision with all game objects
   for (const obj of gameObjects) {
-    // Skip collectible objects (no collision)
-    if (obj.isCollectible) continue;
+    // Skip collectible objects, input objects (buttons)
+    // Skip output objects (doors) only if they are opened
+    if (obj.isCollectible || obj.type === 'input') continue;
+    if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       // Check if character body overlaps with object
@@ -246,7 +256,8 @@ export const checkHeadCollision = (
   character: CharacterState,
   gameObjects: GameObject[],
   cellSize: number,
-  hitboxConfig?: CharacterHitbox
+  hitboxConfig?: CharacterHitbox,
+  openedDoors: Set<string> = new Set()
 ): boolean => {
   const charHitbox = getCharacterHitbox(character, hitboxConfig);
   
@@ -254,11 +265,13 @@ export const checkHeadCollision = (
   const headCollisionTolerance = cellSize * 0.16; // ~5px at base 32px cellSize
 
   for (const obj of gameObjects) {
-    // Skip collectible objects (no collision)
-    if (obj.isCollectible) continue;
+    // Skip collectible objects, input objects (buttons)
+    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip output objects (doors) only if they are opened
+    if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       // Check if character's top (head) overlaps with object bottom
@@ -296,7 +309,7 @@ export const canStandUp = (
   // Check for collisions with game objects
   for (const obj of gameObjects) {
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const rowLetter = cleanAddr.charCodeAt(0); // A=65, P=80, O=79, N=78, etc.
       
       // Skip the P layer (ground) and below - only check above
@@ -329,7 +342,8 @@ export const applyPhysics = (
   gridWidth: number,
   gridHeight: number,
   hitboxConfig?: CharacterHitbox,
-  scale: number = 1
+  scale: number = 1,
+  openedDoors: Set<string> = new Set()
 ): CharacterState => {
   let newChar = { ...character };
 
@@ -352,7 +366,7 @@ export const applyPhysics = (
 
   // Check for head collision (hitting object while moving up)
   // Only kill Y velocity, preserve X momentum
-  if (checkHeadCollision(newChar, gameObjects, cellSize, hitboxConfig)) {
+  if (checkHeadCollision(newChar, gameObjects, cellSize, hitboxConfig, openedDoors)) {
     newChar.velocityY = 0; // Stop upward movement ONLY
     newChar.isJumping = false;
     // Revert Y position to stop at the collision surface
@@ -364,12 +378,12 @@ export const applyPhysics = (
   let sidewaysCollision = false;
   if (newChar.velocityX < 0) {
     // Moving left
-    if (checkSideCollision(newChar, gameObjects, cellSize, hitboxConfig)) {
+    if (checkSideCollision(newChar, gameObjects, cellSize, hitboxConfig, openedDoors)) {
       sidewaysCollision = true;
     }
   } else if (newChar.velocityX > 0) {
     // Moving right
-    if (checkSideCollision(newChar, gameObjects, cellSize, hitboxConfig)) {
+    if (checkSideCollision(newChar, gameObjects, cellSize, hitboxConfig, openedDoors)) {
       sidewaysCollision = true;
     }
   }
@@ -385,10 +399,13 @@ export const applyPhysics = (
   // Push character out of any objects they may have already penetrated
   const charHitbox = getCharacterHitbox(newChar, hitboxConfig);
   for (const obj of gameObjects) {
-    if (obj.isCollectible) continue;
+    // Skip collectible objects, input objects (buttons)
+    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip output objects (doors) only if they are opened
+    if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
-      const cleanAddr = addr.endsWith('R') ? addr.slice(0, -1) : addr;
+      const cleanAddr = getCleanAddress(addr);
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       if (checkHitboxCollision(charHitbox, objHitbox)) {
@@ -426,11 +443,11 @@ export const applyPhysics = (
   }
 
   // Check ground
-  newChar.onGround = checkIfOnGround(newChar, gameObjects, cellSize, hitboxConfig);
+  newChar.onGround = checkIfOnGround(newChar, gameObjects, cellSize, hitboxConfig, openedDoors);
 
   // Snap character to surface if on ground
   if (newChar.onGround) {
-    newChar = snapCharacterToSurface(newChar, gameObjects, cellSize, gridHeight, hitboxConfig);
+    newChar = snapCharacterToSurface(newChar, gameObjects, cellSize, gridHeight, hitboxConfig, openedDoors);
   }
 
   // Clamp to grid boundaries
