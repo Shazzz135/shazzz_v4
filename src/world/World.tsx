@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { dungeonLevel } from '../data/levelSelectData';
 import { sandboxLevel } from '../data/sandboxData';
 import Character from '../components/Character';
+import MobileControls from '../components/MobileControls';
+import RotateDeviceScreen from '../components/RotateDeviceScreen';
 import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartHalf from '../assets/ui/heart/heart_half.svg';
 import heartEmpty from '../assets/ui/heart/heart_empty.svg';
@@ -38,7 +40,7 @@ export default function World() {
   const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [recentlyHitSpikes, setRecentlyHitSpikes] = useState<Set<string>>(new Set()); // Track flickering spikes
   const [flickerState, setFlickerState] = useState(true); // Toggle for flicker animation
-  const [showHitbox] = useState(false); // Debug: show hitboxes
+  const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
   const [showGrid, setShowGrid] = useState(true); // Toggle grid visibility
   const animationTickRef = useRef(0);
 
@@ -133,15 +135,17 @@ export default function World() {
   const B4Position = getPixelPositionFromAddress('B4', cellSize);
 
   return (
-    <div 
-      className="w-screen h-screen overflow-hidden flex items-center justify-center relative"
-      style={{
-        backgroundImage: currentLevel.background ? `url(${currentLevel.background})` : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundColor: '#000000',
-      }}
-    >
+    <>
+      <RotateDeviceScreen />
+      <div 
+        className="w-screen h-screen overflow-hidden flex items-start justify-center relative"
+        style={{
+          backgroundImage: currentLevel.background ? `url(${currentLevel.background})` : undefined,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundColor: '#000000',
+        }}
+      >
       {/* Dataset Toggle Button */}
       <button
         onClick={() => setActiveDataset(activeDataset === 'levelSelect' ? 'sandbox' : 'levelSelect')}
@@ -156,6 +160,14 @@ export default function World() {
         className="absolute top-4 right-4 z-10 px-3 py-2 rounded font-bold text-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors"
       >
         {showGrid ? 'Hide Grid' : 'Show Grid'}
+      </button>
+
+      {/* Hitbox Toggle Button */}
+      <button
+        onClick={() => setShowHitbox(!showHitbox)}
+        className="absolute top-4 right-40 z-10 px-3 py-2 rounded font-bold text-sm bg-red-500 text-white hover:bg-red-600 transition-colors"
+      >
+        {showHitbox ? 'Hide Hitbox' : 'Show Hitbox'}
       </button>
 
       <div className="relative" style={{ width: gridCols * cellSize, height: gridRows * cellSize }}>
@@ -324,16 +336,24 @@ export default function World() {
                 const gridY = (rowLetter - 65) * cellSize;
                 const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
 
-                const hitboxX = gridX + obj.hitbox.x;
-                const hitboxY = gridY + obj.hitbox.y;
+                // Scale hitbox to match current cellSize (hitboxes defined at 32px base)
+                const HITBOX_BASE_SIZE = 32;
+                const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+                const scaledWidth = obj.hitbox.width * scaleFactor;
+                const scaledHeight = obj.hitbox.height * scaleFactor;
+                const scaledOffsetX = obj.hitbox.x * scaleFactor;
+                const scaledOffsetY = obj.hitbox.y * scaleFactor;
+
+                const hitboxX = gridX + scaledOffsetX;
+                const hitboxY = gridY + scaledOffsetY;
 
                 return (
                   <rect
                     key={`${obj.id}-${addr}`}
                     x={hitboxX}
                     y={hitboxY}
-                    width={obj.hitbox.width}
-                    height={obj.hitbox.height}
+                    width={scaledWidth}
+                    height={scaledHeight}
                     fill="none"
                     stroke={obj.isCollectible ? '#00FF00' : '#FF0000'}
                     strokeWidth="2"
@@ -360,6 +380,10 @@ export default function World() {
           />
         )}
       </div>
+
+      {/* Mobile Controls */}
+      <MobileControls />
     </div>
+    </>
   );
 }
