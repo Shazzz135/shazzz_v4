@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+html,
+body {
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif, ;
   line-height: 1.5;

@@ -56,16 +56,26 @@ export const getObjectHitbox = (cellSize: number, address: string, gameObjectHit
 
   // Use the actual object hitbox if provided, otherwise default to full cell
   if (gameObjectHitbox) {
-    const hitboxX = gridX + gameObjectHitbox.x;
-    const hitboxY = gridY + gameObjectHitbox.y;
+    // Scale hitbox dimensions to match current cellSize
+    // Hitboxes are defined at base 32px, so scale by cellSize/32
+    const HITBOX_BASE_SIZE = 32; // Base size hitboxes are defined at
+    const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+    
+    const scaledWidth = gameObjectHitbox.width * scaleFactor;
+    const scaledHeight = gameObjectHitbox.height * scaleFactor;
+    const scaledOffsetX = gameObjectHitbox.x * scaleFactor;
+    const scaledOffsetY = gameObjectHitbox.y * scaleFactor;
+    
+    const hitboxX = gridX + scaledOffsetX;
+    const hitboxY = gridY + scaledOffsetY;
     
     return {
       x: hitboxX,
       y: hitboxY,
-      width: gameObjectHitbox.width,
-      height: gameObjectHitbox.height,
-      right: hitboxX + gameObjectHitbox.width,
-      bottom: hitboxY + gameObjectHitbox.height,
+      width: scaledWidth,
+      height: scaledHeight,
+      right: hitboxX + scaledWidth,
+      bottom: hitboxY + scaledHeight,
     };
   }
 
@@ -107,6 +117,9 @@ export const checkIfOnGround = (
     return true;
   }
 
+  // Scale tolerances based on cellSize to work at any screen resolution
+  const scaledTolerance = cellSize * 0.47; // ~15px at base 32px cellSize
+
   // Check collision with all game objects
   for (const obj of gameObjects) {
     // Skip collectible objects (no collision)
@@ -117,7 +130,8 @@ export const checkIfOnGround = (
       const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
 
       // Check if character is standing on object (forgiving threshold for hitbox transitions)
-      const isAbove = charHitbox.bottom <= objHitbox.y + 15 && charHitbox.bottom > objHitbox.y - 10;
+      // Scaled to work at any screen resolution
+      const isAbove = charHitbox.bottom <= objHitbox.y + scaledTolerance && charHitbox.bottom > objHitbox.y - (scaledTolerance * 0.67);
       const isOverlappingX = charHitbox.x < objHitbox.right && charHitbox.right > objHitbox.x;
       const isFalling = character.velocityY >= 0;
 
@@ -147,6 +161,9 @@ export const snapCharacterToSurface = (
     return newChar;
   }
 
+  // Scale tolerances based on cellSize - 15px at base 32px cellSize
+  const scaledTolerance = cellSize * 0.47;
+
   // Find the highest object surface the character should be standing on
   let highestSurfaceY = gridPixelHeight;
   let shouldSnap = false;
@@ -162,7 +179,8 @@ export const snapCharacterToSurface = (
       // Check if character is over this object (with more lenient X overlap)
       const isOverlappingX = charHitbox.x < objHitbox.right && charHitbox.right > objHitbox.x;
       // Check if character is close to object surface (with tolerance for hitbox height changes)
-      const isCloseToObject = charHitbox.bottom >= objHitbox.y - 15 && charHitbox.bottom <= objHitbox.y + (hitboxConfig?.height || 44) + 15;
+      // Scaled to work at any screen resolution
+      const isCloseToObject = charHitbox.bottom >= objHitbox.y - scaledTolerance && charHitbox.bottom <= objHitbox.y + (hitboxConfig?.height || 44) + scaledTolerance;
       const isFalling = character.velocityY >= 0;
 
       if (isOverlappingX && isCloseToObject && isFalling) {
@@ -231,6 +249,9 @@ export const checkHeadCollision = (
   hitboxConfig?: CharacterHitbox
 ): boolean => {
   const charHitbox = getCharacterHitbox(character, hitboxConfig);
+  
+  // Scale tolerance for head collision - ensures smooth jumping at any resolution
+  const headCollisionTolerance = cellSize * 0.16; // ~5px at base 32px cellSize
 
   for (const obj of gameObjects) {
     // Skip collectible objects (no collision)
@@ -242,7 +263,7 @@ export const checkHeadCollision = (
 
       // Check if character's top (head) overlaps with object bottom
       const isOverlappingX = charHitbox.x < objHitbox.right && charHitbox.right > objHitbox.x;
-      const headTouchesObject = charHitbox.y < objHitbox.bottom && charHitbox.y + 5 > objHitbox.y;
+      const headTouchesObject = charHitbox.y < objHitbox.bottom && charHitbox.y + headCollisionTolerance > objHitbox.y;
       const isMovingUp = character.velocityY < 0;
 
       if (isOverlappingX && headTouchesObject && isMovingUp) {
@@ -268,7 +289,9 @@ export const canStandUp = (
   // Only check for collisions in a zone one grid row ABOVE the character's head
   const headTop = testHitbox.y;
   const checkZoneTop = headTop - cellSize; // One row above
-  const checkZoneBottom = headTop + 5; // Just touching the head
+  // Scale the clearance to match screen size - 50% of cell height
+  const clearanceAmount = cellSize * 0.50;
+  const checkZoneBottom = headTop + clearanceAmount;
   
   // Check for collisions with game objects
   for (const obj of gameObjects) {

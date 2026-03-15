@@ -113,21 +113,31 @@ export default function Character({
     return cells;
   }, [cellSize, gridWidth, gridHeight]);
 
-  // Helper function to check for overhead obstacles
+  // Helper function to check for overhead obstacles - fully scale-aware
   const checkForOverheadObstacle = useCallback((char: CharacterState, currentAnimState: AnimationState): boolean => {
     const standingConfig = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
+    
+    // Use SCALED hitbox dimensions to match actual character size
+    const scaledWidth = standingConfig.width * scale * 0.95;
+    const scaledHeight = standingConfig.height * scale * 0.95;
+    const scaledOffsetX = standingConfig.offsetX * scale * 0.95;
+    const scaledOffsetY = standingConfig.offsetY * scale * 0.95;
+    
     const testHitbox = {
-      x: char.x + standingConfig.offsetX,
-      y: char.y + standingConfig.offsetY,
-      width: standingConfig.width,
-      height: standingConfig.height,
-      right: char.x + standingConfig.offsetX + standingConfig.width,
-      bottom: char.y + standingConfig.offsetY + standingConfig.height,
+      x: char.x + scaledOffsetX,
+      y: char.y + scaledOffsetY,
+      width: scaledWidth,
+      height: scaledHeight,
+      right: char.x + scaledOffsetX + scaledWidth,
+      bottom: char.y + scaledOffsetY + scaledHeight,
     };
     
     const headTop = testHitbox.y;
+    // Scale the clearance check to match current scale - allows ~50% of cell height clearance
+    // This ensures at any screen size, the character can fit under objects that are 1 cell above
+    const clearanceAmount = cellSize * 0.50;
     const checkZoneTop = headTop - cellSize;
-    const checkZoneBottom = headTop + 5;
+    const checkZoneBottom = headTop + clearanceAmount;
     
     for (const obj of gameObjects) {
       for (const addr of obj.address) {
@@ -139,12 +149,20 @@ export default function Character({
         const gridY = (rowLetter - 65) * cellSize;
         const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
         
-        // Use the actual object hitbox
+        // Scale object hitbox to match current cellSize (hitboxes defined at 32px base)
+        const HITBOX_BASE_SIZE = 32;
+        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+        const scaledWidth = obj.hitbox.width * scaleFactor;
+        const scaledHeight = obj.hitbox.height * scaleFactor;
+        const scaledOffsetX = obj.hitbox.x * scaleFactor;
+        const scaledOffsetY = obj.hitbox.y * scaleFactor;
+        
+        // Use the scaled object hitbox
         const objHitbox = {
-          x: gridX + obj.hitbox.x,
-          y: gridY + obj.hitbox.y,
-          right: gridX + obj.hitbox.x + obj.hitbox.width,
-          bottom: gridY + obj.hitbox.y + obj.hitbox.height,
+          x: gridX + scaledOffsetX,
+          y: gridY + scaledOffsetY,
+          right: gridX + scaledOffsetX + scaledWidth,
+          bottom: gridY + scaledOffsetY + scaledHeight,
         };
         
         const objectIsAboveHead = objHitbox.y < checkZoneBottom && objHitbox.bottom > checkZoneTop;
@@ -156,7 +174,7 @@ export default function Character({
       }
     }
     return false; // No obstacle
-  }, [gameObjects, cellSize]);
+  }, [gameObjects, cellSize, scale]);
 
   // Helper function to check for spike collision and deal damage
   const checkSpikeDamage = useCallback((char: CharacterState, currentAnimState: AnimationState) => {
@@ -182,12 +200,20 @@ export default function Character({
         const gridY = (rowLetter - 65) * cellSize;
         const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
 
-        // Get spike hitbox (bottom 30% for damage)
+        // Scale spike hitbox to match current cellSize (hitboxes defined at 32px base)
+        const HITBOX_BASE_SIZE = 32;
+        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+        const scaledWidth = obj.hitbox.width * scaleFactor;
+        const scaledHeight = obj.hitbox.height * scaleFactor;
+        const scaledOffsetX = obj.hitbox.x * scaleFactor;
+        const scaledOffsetY = obj.hitbox.y * scaleFactor;
+
+        // Get spike hitbox (scaled to screen size)
         const spikeHitbox = {
-          x: gridX + obj.hitbox.x,
-          y: gridY + obj.hitbox.y,
-          right: gridX + obj.hitbox.x + obj.hitbox.width,
-          bottom: gridY + obj.hitbox.y + obj.hitbox.height,
+          x: gridX + scaledOffsetX,
+          y: gridY + scaledOffsetY,
+          right: gridX + scaledOffsetX + scaledWidth,
+          bottom: gridY + scaledOffsetY + scaledHeight,
         };
 
         // Check overlap
@@ -485,7 +511,6 @@ export default function Character({
     if (newAnimState !== animationState) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFrameIndex(0);
       animationTickRef.current = 0;
     }
