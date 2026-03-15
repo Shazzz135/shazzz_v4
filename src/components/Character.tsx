@@ -511,7 +511,6 @@ export default function Character({
     if (newAnimState !== animationState) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFrameIndex(0);
       animationTickRef.current = 0;
     }

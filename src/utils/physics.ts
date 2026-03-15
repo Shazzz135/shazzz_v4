@@ -280,8 +280,7 @@ export const canStandUp = (
   character: CharacterState,
   gameObjects: GameObject[],
   cellSize: number,
-  standingConfig: CharacterHitbox,
-  scale: number = 1
+  standingConfig: CharacterHitbox
 ): boolean => {
   // Test what the standing hitbox would be at current character position
   const testChar = { ...character };
