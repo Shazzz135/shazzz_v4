@@ -548,9 +548,6 @@ export default function Character({
         // Check for spike damage
         checkSpikeDamage(newChar, physicsAnimState);
 
-        // Check for button press
-        checkButtonPress(newChar);
-
         return newChar;
       });
 
@@ -568,7 +565,12 @@ export default function Character({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, checkButtonPress, handleKeyDown]);
+  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown, openedDoors]);
+
+  // Check button presses after character position updates
+  useEffect(() => {
+    checkButtonPress(character);
+  }, [character, checkButtonPress]);
 
   // Animation state machine and frame updates
   useEffect(() => {

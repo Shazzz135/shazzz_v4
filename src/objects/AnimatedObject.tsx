@@ -12,6 +12,7 @@ interface AnimatedObjectProps {
 /**
  * AnimatedObject Component
  * Renders objects with animation frames
+ * Supports dynamic scaling (1x1, 2x2, etc.)
  * Examples: coins, crystals, etc.
  */
 export default function AnimatedObject({
@@ -41,6 +42,19 @@ export default function AnimatedObject({
   const rotation = getRotationAngle(address);
   const pos = getPixelPosition(address);
 
+  // Calculate scaled dimensions
+  const gridSize = object.gridSize || { width: 1, height: 1 };
+  const scaledWidth = cellSize * gridSize.width;
+  const scaledHeight = cellSize * gridSize.height;
+
+  // Only render if this is the base address (first cell of a multi-cell object)
+  if (object.gridSize && object.gridSize.width > 1) {
+    const baseAddr = object.address[0];
+    if (address !== baseAddr) {
+      return null; // Don't render duplicate for overflow cells
+    }
+  }
+
   // Build transform string for flip and rotation
   let transformStr = '';
   if (hasFlip) {
@@ -63,8 +77,8 @@ export default function AnimatedObject({
           position: 'absolute',
           left: `${pos.x}px`,
           top: `${pos.y}px`,
-          width: `${cellSize}px`,
-          height: `${cellSize}px`,
+          width: `${scaledWidth}px`,
+          height: `${scaledHeight}px`,
           imageRendering: 'pixelated',
           userSelect: 'none',
           pointerEvents: 'none',

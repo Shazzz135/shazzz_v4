@@ -11,6 +11,7 @@ interface BlockObjectProps {
 /**
  * BlockObject Component
  * Renders static block objects with no animation
+ * Supports dynamic scaling (1x1, 2x2, etc.)
  * Examples: grass_full, stone_half, etc.
  */
 export default function BlockObject({
@@ -34,6 +35,11 @@ export default function BlockObject({
   const rotation = getRotationAngle(address);
   const pos = getPixelPosition(address);
 
+  // Calculate scaled dimensions
+  const gridSize = object.gridSize || { width: 1, height: 1 };
+  const scaledWidth = cellSize * gridSize.width;
+  const scaledHeight = cellSize * gridSize.height;
+
   // Build transform string for flip and rotation
   let transformStr = '';
   if (hasFlip) {
@@ -43,6 +49,15 @@ export default function BlockObject({
     transformStr += `rotate(${rotation}deg) `;
   }
   transformStr = transformStr.trim() || 'none';
+
+  // Only render if this is the base address (first cell of a multi-cell object)
+  // Check if address is one of the expanded addresses but not the first one
+  if (object.gridSize && object.gridSize.width > 1) {
+    const baseAddr = object.address[0];
+    if (address !== baseAddr) {
+      return null; // Don't render duplicate for overflow cells
+    }
+  }
 
   return (
     <>
@@ -54,8 +69,8 @@ export default function BlockObject({
           position: 'absolute',
           left: `${pos.x}px`,
           top: `${pos.y}px`,
-          width: `${cellSize}px`,
-          height: `${cellSize}px`,
+          width: `${scaledWidth}px`,
+          height: `${scaledHeight}px`,
           imageRendering: 'pixelated',
           userSelect: 'none',
           pointerEvents: 'none',

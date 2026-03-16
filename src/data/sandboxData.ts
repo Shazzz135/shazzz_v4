@@ -30,6 +30,12 @@ export const sandboxLevel: LevelData = {
       { x: 4 * 32, y: 9 * 32 },
       ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'P17', 'P18', 'P19', 'P20', 'P21', 'P22', 'P23', 'P24', 'P25', 'P26', 'P27', 'P28', 'P29', 'P30', 'N20', 'N21', 'N22', 'N23', 'N24', 'N25', 'N26', 'N27', 'N28', 'N29', 'N30', 'L25', 'L26', 'L27', 'L28', 'L29', 'L30']
     ),
+    // Test 2x2 scaled block (G5x2) - occupies G5, H5, G6, H6
+    createObject(
+      BLOCK_OBJECTS.stoneFull,
+      { x: 6 * 32, y: 4 * 32 },
+      ['I23x2']
+    ),
     // Input Objects (Buttons) - Row O
     createObject(
       INPUT_OBJECTS.blueButton,
