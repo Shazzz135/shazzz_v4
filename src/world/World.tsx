@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { dungeonLevel } from '../data/levelSelectData';
 import { sandboxLevel } from '../data/sandboxData';
+import { processGameObjects } from '../utils/processGameObjects';
 import Character from '../components/Character';
 import MobileControls from '../components/MobileControls';
 import RotateDeviceScreen from '../components/RotateDeviceScreen';
@@ -39,7 +40,7 @@ export default function World() {
   const [cellSize, setCellSize] = useState(0);
   const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('sandbox');
   const currentLevel = activeDataset === 'levelSelect' ? dungeonLevel : sandboxLevel;
-  const gameObjects = currentLevel.objects;
+  const gameObjects = processGameObjects(currentLevel.objects); // Process objects to expand scaled addresses
   const [objectFrames, setObjectFrames] = useState<Record<string, number>>({}); // Track frame indices for animations
   const [activatedSwitches, setActivatedSwitches] = useState<Set<string>>(new Set()); // Track which switches are activated
   const [openedDoors, setOpenedDoors] = useState<Set<string>>(new Set()); // Track which doors are open

@@ -13,6 +13,7 @@ interface OutputObjectProps {
 /**
  * OutputObject Component
  * Renders output objects (trapdoors) that are triggered by input objects
+ * Supports dynamic scaling (1x1, 2x2, etc.)
  * Examples: blue, green, red trapdoors
  * 
  * Trapdoor states:
@@ -42,6 +43,19 @@ export default function OutputObject({
   const hasFlip = isFlipped(address);
   const rotation = getRotationAngle(address);
   const pos = getPixelPosition(address);
+
+  // Calculate scaled dimensions
+  const gridSize = object.gridSize || { width: 1, height: 1 };
+  const scaledWidth = cellSize * gridSize.width;
+  const scaledHeight = cellSize * gridSize.height;
+
+  // Only render if this is the base address (first cell of a multi-cell object)
+  if (object.gridSize && object.gridSize.width > 1) {
+    const baseAddr = object.address[0];
+    if (address !== baseAddr) {
+      return null; // Don't render duplicate for overflow cells
+    }
+  }
 
   // Build transform string for flip and rotation
   let transformStr = '';
@@ -75,8 +89,8 @@ export default function OutputObject({
           position: 'absolute',
           left: `${pos.x}px`,
           top: `${pos.y}px`,
-          width: `${cellSize}px`,
-          height: `${cellSize}px`,
+          width: `${scaledWidth}px`,
+          height: `${scaledHeight}px`,
           imageRendering: 'pixelated',
           userSelect: 'none',
           pointerEvents: 'none',
