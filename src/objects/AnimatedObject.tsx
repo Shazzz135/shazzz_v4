@@ -34,7 +34,6 @@ export default function AnimatedObject({
   };
 
   if (!object.animation) {
-    console.warn(`AnimatedObject ${object.id} is missing animation frames`);
     return null;
   }
 

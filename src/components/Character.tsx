@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { GameObject } from '../types/GameObject';
 import {
   ANIMATION_FRAMES,
@@ -17,6 +17,10 @@ import {
   stopMoving,
 } from '../utils/physics';
 import { getCleanAddress } from '../utils/addressParser';
+import death1 from '../assets/character/death/death1.svg';
+import death2 from '../assets/character/death/death2.svg';
+import death3 from '../assets/character/death/death3.svg';
+import death4 from '../assets/character/death/death4.svg';
 
 /**
  * Character component - Manages player character rendering, animation, input handling, and physics
@@ -32,9 +36,12 @@ interface CharacterProps {
   spawnAddress?: string; // Character spawn position as grid address (e.g., "E8")
   showHitbox?: boolean; // Debug: show character hitbox
   onHealthChange?: (health: number) => void;
+  onDeath?: () => void; // Called when character dies (health = 0)
   onSpikeHit?: (spikeAddress: string) => void;
   onButtonPress?: (buttonObjectId: string) => void; // Called when character collides with input object
   openedDoors?: Set<string>; // Track which doors are currently opened
+  onPositionChange?: (x: number, y: number) => void; // Called when character position changes
+  onPunch?: (x: number, y: number, width: number, height: number) => void; // Called when character punches with hitbox info
 }
 
 // Helper function to convert grid address to pixel coordinates
@@ -47,7 +54,13 @@ const getPixelPositionFromAddress = (address: string, cellSize: number): { x: nu
   };
 };
 
-export default function Character({
+const DEATH_FRAMES = [death1, death2, death3, death4];
+const DEATH_ANIMATION_SPEED = 12;
+
+const Character = forwardRef<
+  { takeDamage: (amount: number, source: string) => void },
+  CharacterProps
+>(({
   gameObjects,
   cellSize,
   gridWidth,
@@ -56,10 +69,13 @@ export default function Character({
   spawnAddress = 'C5',
   showHitbox = false,
   onHealthChange,
+  onDeath,
   onSpikeHit,
   onButtonPress,
   openedDoors = new Set(),
-}: CharacterProps) {
+  onPositionChange,
+  onPunch,
+}, ref) => {
   // ========== STATE ==========
   const initialSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
   const [character, setCharacter] = useState<CharacterState>({
@@ -80,20 +96,43 @@ export default function Character({
   const [isPunching, setIsPunching] = useState(false);
   const [isProne, setIsProne] = useState(false);
   const [isProneLockedByObstacle, setIsProneLockedByObstacle] = useState(false);
-  const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
+  const [health, setHealth] = useState(3); // 3=full (3 hearts), decreases by 0.5 or 1
   const [isInvulnerable, setIsInvulnerable] = useState(false);
   const [flickerState, setFlickerState] = useState(true); // Controls flicker visibility during immunity
+  const [isDead, setIsDead] = useState(false); // Character is dead (health = 0)
+  const [isDeathAnimationComplete, setIsDeathAnimationComplete] = useState(false); // Death animation finished
 
   // ========== REFS ==========
   const keysPressed = useRef<Record<string, boolean>>({});
   const gameLoopRef = useRef<number | null>(null);
   const animationTickRef = useRef(0);
+  const deathAnimationTickRef = useRef(0); // Track death animation frame timing
   const lastGridPositionRef = useRef<Array<{ x: number; y: number }>>([]);
   const isProneLockedRef = useRef(false); // Sync lock state for keyboard events
   const invulnerabilityEndRef = useRef<number | null>(null); // Timestamp when invulnerability ends
   const recentlyHitSpikesRef = useRef<Set<string>>(new Set()); // Track recently hit spike addresses
   const lastSpikeHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time for each spike (3 second cooldown)
   const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set()); // Track buttons character is currently overlapping (requires re-entry to press again)
+  const punchCalledRef = useRef(false); // Track if onPunch has been called for current punch animation
+
+  // Expose takeDamage method to parent component
+  useImperativeHandle(ref, () => ({
+    takeDamage: (amount: number) => {
+      if (isDead) return; // Don't take damage if already dead
+      if (isInvulnerable) return; // Ignore damage if in grace period
+      
+      // Deal damage
+      setHealth((prev) => {
+        const newHealth = Math.max(prev - amount, 0);
+        return newHealth;
+      });
+
+      // Start invulnerability grace period (3 seconds)
+      setIsInvulnerable(true);
+      invulnerabilityEndRef.current = Date.now() + 3000;
+      setFlickerState(true);
+    },
+  }), [isInvulnerable, isDead]);
 
   // Helper function to get all grid cells occupied by character's hitbox
   const getOccupiedGridCells = useCallback((char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
@@ -239,7 +278,6 @@ export default function Character({
             // Deal damage (0.5 = half a heart)
             setHealth((prev) => {
               const newHealth = Math.max(prev - 0.5, 0);
-              console.log(`DAMAGE: Health ${prev.toFixed(1)} → ${newHealth.toFixed(1)}`);
               return newHealth;
             });
 
@@ -338,6 +376,9 @@ export default function Character({
 
   // ========== INPUT HANDLING ==========
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Disable all input when character is dead
+    if (isDead) return;
+    
     const key = e.key.toLowerCase();
     keysPressed.current[key] = true;
 
@@ -345,6 +386,7 @@ export default function Character({
       setCharacter((prev) => jump(prev, scale));
     }
     if (key === ' ' && character.onGround && character.velocityX === 0 && !keysPressed.current['a'] && !keysPressed.current['d'] && !isProne) {
+      console.log('CHARACTER: Punch!');
       setIsPunching(true);
       e.preventDefault();
     }
@@ -352,7 +394,7 @@ export default function Character({
       console.log('CHARACTER: Entering prone');
       setIsProne(true);
     }
-  }, [isProne, scale, character.onGround, character.velocityX]);
+  }, [isProne, scale, character.onGround, character.velocityX, isDead]);
 
   const handleKeyUp = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
@@ -377,7 +419,7 @@ export default function Character({
 
   // Manage invulnerability timer and flicker effect
   useEffect(() => {
-    if (!isInvulnerable) return;
+    if (!isInvulnerable || isDead) return; // Don't flicker if dead
 
     const flickerInterval = setInterval(() => {
       setFlickerState((prev) => !prev);
@@ -388,7 +430,6 @@ export default function Character({
         setIsInvulnerable(false);
         setFlickerState(true);
         invulnerabilityEndRef.current = null;
-        console.log('IMMUNITY: Invulnerability ended');
       }
     }, 50); // Check every 50ms
 
@@ -396,12 +437,19 @@ export default function Character({
       clearInterval(flickerInterval);
       clearInterval(invulnerabilityInterval);
     };
-  }, [isInvulnerable]);
+  }, [isInvulnerable, isDead]);
 
   // Update parent when health changes
   useEffect(() => {
     onHealthChange?.(health);
-  }, [health, onHealthChange]);
+    
+    // Detect death (health = 0)
+    if (health <= 0 && !isDead) {
+      setIsDead(true);
+      setFrameIndex(0); // Reset to first death frame
+      onDeath?.();
+    }
+  }, [health, onHealthChange, isDead, onDeath]);
 
   // Check overhead obstacles when character moves to a new grid cell (only when prone)
   useEffect(() => {
@@ -427,19 +475,14 @@ export default function Character({
         // Update lock state based on current state and what we found
         if (isProneLockedByObstacle && !hasObstacle) {
           // Was locked, but now clear - unlock
-          console.log('CHARACTER: Prone clearance - no overhead obstacles');
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsProneLockedByObstacle(false);
           // Auto-stand only if NOT holding 's'
           if (!isHoldingProneKey) {
-            console.log('CHARACTER: Standing up (not holding prone key)');
             setIsProne(false);
-          } else {
-            console.log('CHARACTER: Staying prone (holding prone key)');
           }
+          // Otherwise, keep prone state if holding 's'
         } else if (!isProneLockedByObstacle && hasObstacle) {
           // Was unlocked, but now blocked - lock
-          console.log('CHARACTER: Overhead obstacle - prone is now locked');
           setIsProneLockedByObstacle(true);
         }
       }
@@ -451,7 +494,6 @@ export default function Character({
 
   // Update character size when scale changes
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       width: CHARACTER_WIDTH * scale * 0.95,
@@ -462,7 +504,6 @@ export default function Character({
   // Recalculate character position when cellSize changes to maintain relative grid position
   useEffect(() => {
     const newSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       x: newSpawnPos.x,
@@ -501,11 +542,6 @@ export default function Character({
           if (!facingRight) setFacingRight(true);
         } else {
           newChar = stopMoving(newChar);
-        }
-
-        // Debug velocity changes
-        if (Math.abs(newChar.velocityX - prev.velocityX) > 0.01) {
-          console.log(`Velocity: ${prev.velocityX.toFixed(2)} → ${newChar.velocityX.toFixed(2)}`);
         }
 
         // Determine animation state for physics
@@ -572,8 +608,64 @@ export default function Character({
     checkButtonPress(character);
   }, [character, checkButtonPress]);
 
+  // Call position change callback when character moves
+  useEffect(() => {
+    if (onPositionChange) {
+      onPositionChange(character.x, character.y);
+    }
+  }, [character.x, character.y, onPositionChange]);
+
+  // Call punch callback when punching
+  useEffect(() => {
+    if (!isPunching) {
+      // Reset punch ref when punch ends (allows next punch to trigger)
+      punchCalledRef.current = false;
+    } else if (isPunching && onPunch && !punchCalledRef.current) {
+      // Calculate punch hitbox extensions
+      const punchExtendRange = character.width * 0.05;
+      const punchHeight = character.height * 0.3;
+      const punchY = character.y + character.height * 0.35;
+      let punchX = character.x;
+      let punchWidth = punchExtendRange;
+      
+      if (facingRight) {
+        // Right-facing punch extends from right side of character forward
+        punchX = character.x + character.width;
+        punchWidth = punchExtendRange;
+      } else {
+        // Left-facing punch extends from left side of character backward  
+        punchX = character.x - punchExtendRange;
+        punchWidth = punchExtendRange;
+      }
+      
+      onPunch(punchX, punchY, punchWidth, punchHeight);
+      punchCalledRef.current = true; // Mark that punch has been called
+    }
+  }, [isPunching]);
+
   // Animation state machine and frame updates
   useEffect(() => {
+    // If dead, handle death animation separately
+    if (isDead) {
+      if (!isDeathAnimationComplete) {
+        // Play death animation
+        deathAnimationTickRef.current++;
+        if (deathAnimationTickRef.current >= DEATH_ANIMATION_SPEED) {
+          deathAnimationTickRef.current = 0;
+          setFrameIndex((prev) => {
+            const nextFrame = prev + 1;
+            if (nextFrame >= DEATH_FRAMES.length) {
+              // Death animation complete, freeze on last frame
+              setIsDeathAnimationComplete(true);
+              return DEATH_FRAMES.length - 1;
+            }
+            return nextFrame;
+          });
+        }
+      }
+      return; // Skip normal animation handling
+    }
+
     // Determine animation state based on character action
     let newAnimState: AnimationState = 'idle';
 
@@ -594,7 +686,6 @@ export default function Character({
 
     // Reset frame when animation state changes
     if (newAnimState !== animationState) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
       setFrameIndex(0);
       animationTickRef.current = 0;
@@ -640,11 +731,12 @@ export default function Character({
     }, 16);
 
     return () => clearInterval(animationInterval);
-  }, [character, animationState, isPunching, isProne]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character, animationState, isPunching, isProne, isDead, isDeathAnimationComplete]);
 
   // ========== RENDERING ==========
-  const frames = ANIMATION_FRAMES[animationState as AnimationState];
-  const currentFrame = frames[frameIndex] || frames[0];
+  const frames = isDead ? DEATH_FRAMES : ANIMATION_FRAMES[animationState as AnimationState];
+  const currentFrame = frames[Math.min(frameIndex, frames.length - 1)] || frames[0];
 
   return (
     <>
@@ -653,15 +745,14 @@ export default function Character({
         alt="character"
         className="absolute"
         style={{
-          left: `${character.x}px`,
-          top: `${character.y}px`,
           width: `${character.width}px`,
           height: `${character.height}px`,
           objectFit: 'contain',
-          transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
+          transform: `translate(${character.x}px, ${character.y}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
           pointerEvents: 'none',
           opacity: isInvulnerable && !flickerState ? 0 : 1, // Flicker during immunity
           transition: 'opacity 0.05s', // Smooth opacity changes
+          willChange: 'transform', // Hardware acceleration hint
         }}
       />
       {showHitbox && (
@@ -687,6 +778,44 @@ export default function Character({
           />
         </svg>
       )}
+      {showHitbox && isPunching && (
+        <svg
+          className="absolute"
+          style={{
+            left: '0px',
+            top: '0px',
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+          }}
+        >
+          {facingRight ? (
+            <rect
+              x={character.x + character.width}
+              y={character.y + character.height * 0.35}
+              width={character.width * 0.05}
+              height={character.height * 0.3}
+              fill="rgba(255, 0, 0, 0.3)"
+              stroke="#FF0000"
+              strokeWidth="2"
+            />
+          ) : (
+            <rect
+              x={character.x - character.width * 0.05}
+              y={character.y + character.height * 0.35}
+              width={character.width * 0.05}
+              height={character.height * 0.3}
+              fill="rgba(255, 0, 0, 0.3)"
+              stroke="#FF0000"
+              strokeWidth="2"
+            />
+          )}
+        </svg>
+      )}
     </>
   );
-}
+});
+
+Character.displayName = 'Character';
+
+export default Character;
