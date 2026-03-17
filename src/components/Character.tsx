@@ -132,7 +132,7 @@ const Character = forwardRef<
       invulnerabilityEndRef.current = Date.now() + 3000;
       setFlickerState(true);
     },
-  }), [isInvulnerable]);
+  }), [isInvulnerable, isDead]);
 
   // Helper function to get all grid cells occupied by character's hitbox
   const getOccupiedGridCells = useCallback((char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
@@ -437,7 +437,7 @@ const Character = forwardRef<
       clearInterval(flickerInterval);
       clearInterval(invulnerabilityInterval);
     };
-  }, [isInvulnerable]);
+  }, [isInvulnerable, isDead]);
 
   // Update parent when health changes
   useEffect(() => {
@@ -449,7 +449,7 @@ const Character = forwardRef<
       setFrameIndex(0); // Reset to first death frame
       onDeath?.();
     }
-  }, [health, onHealthChange, isDead]);
+  }, [health, onHealthChange, isDead, onDeath]);
 
   // Check overhead obstacles when character moves to a new grid cell (only when prone)
   useEffect(() => {
@@ -475,13 +475,12 @@ const Character = forwardRef<
         // Update lock state based on current state and what we found
         if (isProneLockedByObstacle && !hasObstacle) {
           // Was locked, but now clear - unlock
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsProneLockedByObstacle(false);
           // Auto-stand only if NOT holding 's'
           if (!isHoldingProneKey) {
             setIsProne(false);
-          } else {
           }
+          // Otherwise, keep prone state if holding 's'
         } else if (!isProneLockedByObstacle && hasObstacle) {
           // Was unlocked, but now blocked - lock
           setIsProneLockedByObstacle(true);
@@ -495,7 +494,6 @@ const Character = forwardRef<
 
   // Update character size when scale changes
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       width: CHARACTER_WIDTH * scale * 0.95,
@@ -506,7 +504,6 @@ const Character = forwardRef<
   // Recalculate character position when cellSize changes to maintain relative grid position
   useEffect(() => {
     const newSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCharacter((prev) => ({
       ...prev,
       x: newSpawnPos.x,
@@ -689,7 +686,6 @@ const Character = forwardRef<
 
     // Reset frame when animation state changes
     if (newAnimState !== animationState) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimationState(newAnimState);
       setFrameIndex(0);
       animationTickRef.current = 0;
@@ -735,6 +731,7 @@ const Character = forwardRef<
     }, 16);
 
     return () => clearInterval(animationInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character, animationState, isPunching, isProne, isDead, isDeathAnimationComplete]);
 
   // ========== RENDERING ==========

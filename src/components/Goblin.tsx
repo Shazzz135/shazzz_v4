@@ -44,7 +44,7 @@ interface GoblinState {
   onGround: boolean;
 }
 
-interface GoblinHandle {
+export interface GoblinHandle {
   getPosition: () => { x: number; y: number; width: number; height: number };
   turnTowardPlayer: (playerX: number) => void;
 }
@@ -199,7 +199,6 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   useEffect(() => {
     if (isPlayerDead) {
       isChasingRef.current = false; // Stop chasing when player is dead
-      setIsAttacking(false); // Stop attacking when player is dead
     }
   }, [isPlayerDead]);
 
@@ -340,7 +339,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   useEffect(() => {
     const gameLoop = setInterval(() => {
       setGoblin((prevGoblin) => {
-        let newGoblin = { ...prevGoblin };
+        const newGoblin = { ...prevGoblin };
 
         // Stop if defeated
         if (isDefeated) {
@@ -518,6 +517,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
     }, 1000 / 60); // 60 FPS
 
     return () => clearInterval(gameLoop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gridPixelWidth, gridPixelHeight, cellSize, gridWidth, gridHeight, isDefeated, isAttacking, isDeathAnimationComplete, facingRight, isPlayerDead]);
 
   return (

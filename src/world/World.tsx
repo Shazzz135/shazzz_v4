@@ -5,7 +5,7 @@ import { processGameObjects } from '../utils/processGameObjects';
 import type { NPC } from '../types/NPC';
 import Character from '../components/Character';
 import { CHARACTER_WIDTH, CHARACTER_HEIGHT } from '../constants/animations';
-import Goblin from '../components/Goblin';
+import Goblin, { type GoblinHandle } from '../components/Goblin';
 import MobileControls from '../components/MobileControls';
 import RotateDeviceScreen from '../components/RotateDeviceScreen';
 import BlockObject from '../objects/BlockObject';
@@ -51,7 +51,7 @@ export default function World() {
   const [goblinHitCounts, setGoblinHitCounts] = useState<Record<string, number>>({}); // Track hits per goblin for display
   const [goblinInGracePeriod, setGoblinInGracePeriod] = useState<Set<string>>(new Set()); // Track which goblins are in grace period
   const [defeatedGoblins, setDefeatedGoblins] = useState<Set<string>>(new Set()); // Track defeated goblins
-  const goblinRefsRef = useRef<Record<string, any>>({}); // Store goblin refs for punch detection
+  const goblinRefsRef = useRef<Record<string, GoblinHandle>>({}); // Store goblin refs for punch detection
   const goblinHitsRef = useRef<Record<string, number>>({}); // Track hits per goblin
   const goblinDefeatedRef = useRef<Set<string>>(new Set()); // Immediate defeat tracking (sync, not async state)
   const goblinLastHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time per goblin
@@ -141,6 +141,7 @@ export default function World() {
       setGoblinInGracePeriod(newGracePeriodSet);
     }, ANIMATION_TICK_RATE); // 30 FPS on mobile, 60 FPS on desktop
     return () => clearInterval(gameLoop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLevel.npcs]);
 
   // Animation loop for objects
@@ -269,6 +270,7 @@ export default function World() {
     }, ANIMATION_TICK_RATE); // 30 FPS on mobile, 60 FPS on desktop
     
     return () => clearInterval(animationLoop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameObjects, objectFrames, buttonAnimationFrames, doorAnimationFrames, activatedSwitches, openedDoors, completedDoors]);
 
   const scale = cellSize > 0 ? cellSize / BASE_CELL_SIZE : 1;
