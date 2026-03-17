@@ -4,6 +4,7 @@
  * Build levels by creating LevelData definitions using object definitions
  */
 import type { GameObject } from '../types/GameObject';
+import type { NPC } from '../types/NPC';
 import { BLOCK_OBJECTS } from '../objects/definitions';
 import dungeon from '../assets/backgrounds/dungeon.webp';
 
@@ -13,6 +14,7 @@ export interface LevelData {
   background: string; // Background image path
   objects: GameObject[];
   characterSpawn: string; // Grid address (e.g., "D8")
+  npcs?: NPC[]; // Non-player characters (optional)
 }
 
 // Helper function to create a game object instance with position and address

@@ -326,7 +326,6 @@ export const canStandUp = (
       const xOverlap = testHitbox.x < objHitbox.right && testHitbox.right > objHitbox.x;
       
       if (objectIsAboveHead && xOverlap) {
-        console.log('canStandUp: Blocked by object above head');
         return false; // Object above head blocks standing
       }
     }

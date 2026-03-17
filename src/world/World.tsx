@@ -2,16 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { dungeonLevel } from '../data/levelSelectData';
 import { sandboxLevel } from '../data/sandboxData';
 import { processGameObjects } from '../utils/processGameObjects';
+import type { NPC } from '../types/NPC';
 import Character from '../components/Character';
+import { CHARACTER_WIDTH, CHARACTER_HEIGHT } from '../constants/animations';
+import Goblin from '../components/Goblin';
 import MobileControls from '../components/MobileControls';
 import RotateDeviceScreen from '../components/RotateDeviceScreen';
 import BlockObject from '../objects/BlockObject';
 import AnimatedObject from '../objects/AnimatedObject';
 import InputObject from '../objects/InputObject';
 import OutputObject from '../objects/OutputObject';
-import heartFull from '../assets/ui/heart/heart_full.svg';
-import heartHalf from '../assets/ui/heart/heart_half.svg';
-import heartEmpty from '../assets/ui/heart/heart_empty.svg';
 
 /**
  * Universal Level/Game Scene Component
@@ -20,21 +20,13 @@ import heartEmpty from '../assets/ui/heart/heart_empty.svg';
  * Dynamically scales to fit screen while maintaining 30×16 grid layout
  */
 
-// Converts grid address (e.g., "A1", "P16") to pixel coordinates
-const getPixelPositionFromAddress = (address: string, cellSize: number): { x: number; y: number } => {
-  const row = address.charCodeAt(0) - 65;
-  const col = parseInt(address.substring(1)) - 1;
-  return {
-    x: col * cellSize,
-    y: row * cellSize,
-  };
-};
-
 export default function World() {
   // ========== GRID CONFIGURATION ==========
   const gridCols = 30;
   const gridRows = 16;
   const BASE_CELL_SIZE = 32; // Base cell size for scale calculation
+  const isMobile = /iPhone|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const ANIMATION_TICK_RATE = isMobile ? 32 : 16; // 30 FPS on mobile, 60 FPS on desktop
   
   // ========== STATE ==========
   const [cellSize, setCellSize] = useState(0);
@@ -49,10 +41,24 @@ export default function World() {
   const [completedDoors, setCompletedDoors] = useState<Set<string>>(new Set()); // Track doors that finished animating and should disappear
   const [doorAnimationDirection, setDoorAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for doors
   const [buttonAnimationDirection, setButtonAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for buttons
-  const [health, setHealth] = useState(1); // 1=full, 0.5=half, 0=empty
   const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
   const [showGrid, setShowGrid] = useState(false); // Toggle grid visibility
+  const [characterX, setCharacterX] = useState(0); // Track character X position for goblin AI
+  const [characterY, setCharacterY] = useState(0); // Track character Y position for goblin AI
+  const [playerHealth, setPlayerHealth] = useState(3); // 3=full (3 hearts), decreases by 0.5 or 1 per hit
+  const [heartFlickerState, setHeartFlickerState] = useState(true); // Controls heart flicker visibility during immunity
+  const heartInvulnerabilityEndRef = useRef<number | null>(null); // Timestamp when heart immunity ends
+  const [goblinHitCounts, setGoblinHitCounts] = useState<Record<string, number>>({}); // Track hits per goblin for display
+  const [goblinInGracePeriod, setGoblinInGracePeriod] = useState<Set<string>>(new Set()); // Track which goblins are in grace period
+  const [defeatedGoblins, setDefeatedGoblins] = useState<Set<string>>(new Set()); // Track defeated goblins
+  const goblinRefsRef = useRef<Record<string, any>>({}); // Store goblin refs for punch detection
+  const goblinHitsRef = useRef<Record<string, number>>({}); // Track hits per goblin
+  const goblinDefeatedRef = useRef<Set<string>>(new Set()); // Immediate defeat tracking (sync, not async state)
+  const goblinLastHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time per goblin
+  const lastPunchGoblinRef = useRef<string | null>(null); // Prevent same goblin being hit twice in one punch
+  const GRACE_PERIOD_MS = 2000; // 2 second grace period between hits
   const animationTickRef = useRef(0);
+  const characterRef = useRef<{ takeDamage: (amount: number) => void }>(null); // Ref to call takeDamage on character
 
   useEffect(() => {
     const calculateCellSize = () => {
@@ -66,6 +72,76 @@ export default function World() {
     window.addEventListener('resize', calculateCellSize);
     return () => window.removeEventListener('resize', calculateCellSize);
   }, []);
+
+  const lastPlayerHealthRef = useRef(3); // Track last health value to detect damage
+  const flickerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const invulnerabilityCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Manage heart flicker when player takes damage
+  useEffect(() => {
+    if (playerHealth < lastPlayerHealthRef.current) {
+      // Health decreased - player took damage, start flickering instantly
+      lastPlayerHealthRef.current = playerHealth;
+      
+      // Clear any existing intervals before starting new ones
+      if (flickerIntervalRef.current) clearInterval(flickerIntervalRef.current);
+      if (invulnerabilityCheckIntervalRef.current) clearInterval(invulnerabilityCheckIntervalRef.current);
+      
+      // Start flickering immediately with no delay
+      setHeartFlickerState(true);
+      heartInvulnerabilityEndRef.current = Date.now() + 3000; // 3 second flicker duration
+
+      flickerIntervalRef.current = setInterval(() => {
+        setHeartFlickerState((prev) => !prev);
+      }, 200); // Toggle flicker every 200ms
+
+      // Trigger immediate first flicker (no 200ms wait) - happens on next microtask
+      queueMicrotask(() => setHeartFlickerState((prev) => !prev));
+
+      invulnerabilityCheckIntervalRef.current = setInterval(() => {
+        if (heartInvulnerabilityEndRef.current && Date.now() >= heartInvulnerabilityEndRef.current) {
+          setHeartFlickerState(true);
+          heartInvulnerabilityEndRef.current = null;
+          
+          if (flickerIntervalRef.current) clearInterval(flickerIntervalRef.current);
+          if (invulnerabilityCheckIntervalRef.current) clearInterval(invulnerabilityCheckIntervalRef.current);
+          flickerIntervalRef.current = null;
+          invulnerabilityCheckIntervalRef.current = null;
+        }
+      }, 50); // Check every 50ms
+    } else if (playerHealth > lastPlayerHealthRef.current) {
+      lastPlayerHealthRef.current = playerHealth;
+    }
+  }, [playerHealth]);
+
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (flickerIntervalRef.current) clearInterval(flickerIntervalRef.current);
+      if (invulnerabilityCheckIntervalRef.current) clearInterval(invulnerabilityCheckIntervalRef.current);
+    };
+  }, []);
+
+  // Reset punch tracking on punch start/end
+  useEffect(() => {
+    const gameLoop = setInterval(() => {
+      lastPunchGoblinRef.current = null; // Reset per-punch goblin tracking
+
+      // Update grace period state for all goblins
+      const now = Date.now();
+      const newGracePeriodSet = new Set<string>();
+      currentLevel.npcs?.forEach((npc) => {
+        if (npc.type === 'goblin') {
+          const lastHitTime = goblinLastHitTimeRef.current[npc.id] ?? 0;
+          if (now - lastHitTime < GRACE_PERIOD_MS) {
+            newGracePeriodSet.add(npc.id);
+          }
+        }
+      });
+      setGoblinInGracePeriod(newGracePeriodSet);
+    }, ANIMATION_TICK_RATE); // 30 FPS on mobile, 60 FPS on desktop
+    return () => clearInterval(gameLoop);
+  }, [currentLevel.npcs]);
 
   // Animation loop for objects
   useEffect(() => {
@@ -190,15 +266,70 @@ export default function World() {
       if (Object.keys(cleanedDoorDir).length > 0) {
         setDoorAnimationDirection(cleanedDoorDir);
       }
-    }, 16); // ~60 FPS
+    }, ANIMATION_TICK_RATE); // 30 FPS on mobile, 60 FPS on desktop
     
     return () => clearInterval(animationLoop);
   }, [gameObjects, objectFrames, buttonAnimationFrames, doorAnimationFrames, activatedSwitches, openedDoors, completedDoors]);
 
   const scale = cellSize > 0 ? cellSize / BASE_CELL_SIZE : 1;
 
-  const handleHealthChange = (newHealth: number) => {
-    setHealth(newHealth);
+  const handleGoblinAttack = () => {
+    // Goblin hit the character - deal 1 heart of damage
+    characterRef.current?.takeDamage(1);
+  };
+
+  // Handle character punch detection - all punch logic centralized here
+  const handlePunch = (punchX: number, punchY: number, punchWidth: number, punchHeight: number) => {
+    const now = Date.now();
+    const defeatedCountBefore = goblinDefeatedRef.current.size;
+    let anyDefeated = false;
+
+    // Check collision with each goblin
+    currentLevel.npcs?.forEach((npc) => {
+      if (npc.type !== 'goblin' || goblinDefeatedRef.current.has(npc.id)) return;
+      if (lastPunchGoblinRef.current === npc.id) return; // This goblin was already hit this punch
+
+      const goblinRef = goblinRefsRef.current[npc.id];
+      if (!goblinRef) return;
+
+      const goblinPos = goblinRef.getPosition();
+
+      // AABB collision check
+      const punchHits =
+        punchX < goblinPos.x + goblinPos.width &&
+        punchX + punchWidth > goblinPos.x &&
+        punchY < goblinPos.y + goblinPos.height &&
+        punchY + punchHeight > goblinPos.y;
+
+      if (!punchHits) return;
+
+      // Check grace period
+      const lastHitTime = goblinLastHitTimeRef.current[npc.id] ?? 0;
+      if (now - lastHitTime < GRACE_PERIOD_MS) return;
+
+      // Register hit
+      const currentHits = (goblinHitsRef.current[npc.id] ?? 0) + 1;
+      goblinHitsRef.current[npc.id] = currentHits;
+      goblinLastHitTimeRef.current[npc.id] = now;
+      lastPunchGoblinRef.current = npc.id; // Prevent this goblin from being hit again this punch
+
+      // Make goblin turn towards player
+      goblinRef.turnTowardPlayer(characterX);
+
+      // Update hit count for display
+      setGoblinHitCounts((prev) => ({ ...prev, [npc.id]: currentHits }));
+
+      // Check if defeated
+      if (currentHits >= 3) {
+        goblinDefeatedRef.current.add(npc.id);
+        anyDefeated = true;
+      }
+    });
+
+    // Update defeated state only if any goblin was newly defeated
+    if (anyDefeated || goblinDefeatedRef.current.size > defeatedCountBefore) {
+      setDefeatedGoblins(new Set(goblinDefeatedRef.current));
+    }
   };
 
   // Handle switch activation/deactivation
@@ -308,18 +439,6 @@ export default function World() {
     }
   };
 
-  // Determine which heart image to display based on health
-  const getHeartImage = (): string => {
-    if (health >= 1) return heartFull;
-    if (health >= 0.5) return heartHalf;
-    return heartEmpty;
-  };
-
-  // Get grid positions for heart display
-  const B2Position = getPixelPositionFromAddress('B2', cellSize);
-  const B3Position = getPixelPositionFromAddress('B3', cellSize);
-  const B4Position = getPixelPositionFromAddress('B4', cellSize);
-
   return (
     <>
       <RotateDeviceScreen />
@@ -348,13 +467,15 @@ export default function World() {
         {showGrid ? 'Hide Grid' : 'Show Grid'}
       </button>
 
-      {/* Hitbox Toggle Button */}
+      {/* Hitbox Toggle Button - not shown on mobile */}
+      {!isMobile && (
       <button
         onClick={() => setShowHitbox(!showHitbox)}
         className="absolute top-4 right-40 z-10 px-3 py-2 rounded font-bold text-sm bg-red-500 text-white hover:bg-red-600 transition-colors"
       >
         {showHitbox ? 'Hide Hitbox' : 'Show Hitbox'}
       </button>
+      )}
 
       <div className="relative" style={{ width: gridCols * cellSize, height: gridRows * cellSize }}>
         {/* Game Objects Layer */}
@@ -414,7 +535,6 @@ export default function World() {
                       />
                     );
                   default:
-                    console.warn(`Unknown object type: ${obj.type}`);
                     return null;
                 }
               });
@@ -422,8 +542,8 @@ export default function World() {
           </div>
         )}
 
-        {/* Grid Layer */}
-        {cellSize > 0 && showGrid && (
+        {/* Grid Layer - disabled on mobile for performance */}
+        {cellSize > 0 && showGrid && !isMobile && (
           <svg
             className="absolute inset-0"
             width={gridCols * cellSize}
@@ -484,51 +604,6 @@ export default function World() {
           </svg>
         )}
 
-        {/* UI Layer - Health Hearts */}
-        {cellSize > 0 && (
-          <div className="absolute inset-0">
-            {/* First heart at B2 - shows current health */}
-            <img
-              src={getHeartImage()}
-              alt="health-1"
-              className="absolute"
-              style={{
-                left: `${B2Position.x}px`,
-                top: `${B2Position.y}px`,
-                width: `${cellSize}px`,
-                height: `${cellSize}px`,
-                objectFit: 'contain',
-              }}
-            />
-            {/* Second heart at B3 - full heart */}
-            <img
-              src={heartFull}
-              alt="health-2"
-              className="absolute"
-              style={{
-                left: `${B3Position.x}px`,
-                top: `${B3Position.y}px`,
-                width: `${cellSize}px`,
-                height: `${cellSize}px`,
-                objectFit: 'contain',
-              }}
-            />
-            {/* Third heart at B4 - full heart */}
-            <img
-              src={heartFull}
-              alt="health-3"
-              className="absolute"
-              style={{
-                left: `${B4Position.x}px`,
-                top: `${B4Position.y}px`,
-                width: `${cellSize}px`,
-                height: `${cellSize}px`,
-                objectFit: 'contain',
-              }}
-            />
-          </div>
-        )}
-
         {/* Debug Layer - Hitboxes */}
         {cellSize > 0 && showHitbox && (
           <svg
@@ -574,20 +649,98 @@ export default function World() {
 
         {/* Character Layer */}
         {cellSize > 0 && (
-          <Character
-            gameObjects={gameObjects}
-            cellSize={cellSize}
-            gridWidth={gridCols}
-            gridHeight={gridRows}
-            scale={scale}
-            spawnAddress={currentLevel.characterSpawn}
-            onHealthChange={handleHealthChange}
-            onButtonPress={handleSwitchActivation}
-            openedDoors={openedDoors}
-            showHitbox={showHitbox}
-          />
+          <>
+            {/* Render NPCs */}
+            {currentLevel.npcs?.map((npc: NPC) => {
+              if (npc.type === 'goblin') {
+                return (
+                  <Goblin
+                    key={npc.id}
+                    ref={(ref) => {
+                      if (ref) {
+                        goblinRefsRef.current[npc.id] = ref;
+                      }
+                    }}
+                    id={npc.id}
+                    address={npc.address}
+                    cellSize={cellSize}
+                    gridWidth={gridCols}
+                    gridHeight={gridRows}
+                    gameObjects={gameObjects}
+                    openedDoors={openedDoors}
+                    characterX={characterX}
+                    characterY={characterY}
+                    characterWidth={CHARACTER_WIDTH * scale}
+                    characterHeight={CHARACTER_HEIGHT * scale}
+                    scale={scale}
+                    showHitbox={showHitbox}
+                    isDefeated={defeatedGoblins.has(npc.id)}
+                    isPlayerDead={playerHealth <= 0}
+                    hitCount={goblinHitCounts[npc.id] ?? 0}
+                    isInGracePeriod={goblinInGracePeriod.has(npc.id)}
+                    onAttackHit={handleGoblinAttack}
+                  />
+                );
+              }
+              return null;
+            })}
+
+            {/* Render Player Character */}
+            <Character
+              ref={characterRef}
+              gameObjects={gameObjects}
+              cellSize={cellSize}
+              gridWidth={gridCols}
+              gridHeight={gridRows}
+              scale={scale}
+              spawnAddress={currentLevel.characterSpawn}
+              onHealthChange={(health) => setPlayerHealth(health)}
+              onDeath={() => {
+                // Player died - any World-level cleanup can go here
+                // Character component already handles death animation and input lockout
+              }}
+              onButtonPress={handleSwitchActivation}
+              openedDoors={openedDoors}
+              showHitbox={showHitbox}
+              onPositionChange={(x, y) => {
+                setCharacterX(x);
+                setCharacterY(y);
+              }}
+              onPunch={handlePunch}
+            />
+          </>
         )}
       </div>
+
+      {/* Player Health Display - 3 Hearts at A1x2, A4x2, A7x2 (dies right to left) */}
+      {cellSize > 0 && (
+        <div className="absolute top-0 left-0 z-20 flex gap-2" style={{ padding: `${cellSize * 0.5}px` }}>
+          {/* Heart 1 (A1x2) - Leftmost, dies last - represents 0-1 health */}
+          <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
+            <img
+              src={playerHealth >= 1 ? '/ui/heart/heart_full.svg' : playerHealth >= 0.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              alt="Heart 1"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
+            />
+          </div>
+          {/* Heart 2 (A4x2) - Middle - represents 1-2 health */}
+          <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
+            <img
+              src={playerHealth >= 2 ? '/ui/heart/heart_full.svg' : playerHealth >= 1.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              alt="Heart 2"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
+            />
+          </div>
+          {/* Heart 3 (A7x2) - Rightmost, dies first - represents 2-3 health */}
+          <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
+            <img
+              src={playerHealth >= 3 ? '/ui/heart/heart_full.svg' : playerHealth >= 2.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              alt="Heart 3"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Mobile Controls */}
       <MobileControls />
