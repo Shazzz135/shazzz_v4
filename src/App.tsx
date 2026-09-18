@@ -19,6 +19,7 @@ function RouteTransition() {
 
   useEffect(() => {
     if (location.pathname !== displayLocation.pathname) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsTransitioning(true);
       const timer = setTimeout(() => {
         setDisplayLocation(location);
