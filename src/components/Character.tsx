@@ -641,7 +641,7 @@ const Character = forwardRef<
       onPunch(punchX, punchY, punchWidth, punchHeight);
       punchCalledRef.current = true; // Mark that punch has been called
     }
-  }, [isPunching]);
+  }, [isPunching, character, facingRight, onPunch]);
 
   // Animation state machine and frame updates
   useEffect(() => {
@@ -737,7 +737,6 @@ const Character = forwardRef<
     }, 16);
 
     return () => clearInterval(animationInterval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character, animationState, isPunching, isProne, isDead, isDeathAnimationComplete]);
 
   // ========== RENDERING ==========
