@@ -42,6 +42,7 @@ interface CharacterProps {
   openedDoors?: Set<string>; // Track which doors are currently opened
   onPositionChange?: (x: number, y: number) => void; // Called when character position changes
   onPunch?: (x: number, y: number, width: number, height: number) => void; // Called when character punches with hitbox info
+  onPortalEnter?: (x: number, y: number) => void; // Called when E key pressed on portal with character position
 }
 
 // Helper function to convert grid address to pixel coordinates
@@ -75,6 +76,7 @@ const Character = forwardRef<
   openedDoors = new Set(),
   onPositionChange,
   onPunch,
+  onPortalEnter,
 }, ref) => {
   // ========== STATE ==========
   const initialSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
@@ -115,7 +117,7 @@ const Character = forwardRef<
   const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set()); // Track buttons character is currently overlapping (requires re-entry to press again)
   const punchCalledRef = useRef(false); // Track if onPunch has been called for current punch animation
 
-  // Expose takeDamage method to parent component
+  // Expose takeDamage and teleportTo methods to parent component
   useImperativeHandle(ref, () => ({
     takeDamage: (amount: number) => {
       if (isDead) return; // Don't take damage if already dead
@@ -131,6 +133,16 @@ const Character = forwardRef<
       setIsInvulnerable(true);
       invulnerabilityEndRef.current = Date.now() + 3000;
       setFlickerState(true);
+    },
+    teleportTo: (x: number, y: number) => {
+      // Teleport character to new position
+      setCharacter((prev) => ({
+        ...prev,
+        x,
+        y,
+        velocityX: 0,
+        velocityY: 0,
+      }));
     },
   }), [isInvulnerable, isDead]);
 
@@ -394,7 +406,12 @@ const Character = forwardRef<
       console.log('CHARACTER: Entering prone');
       setIsProne(true);
     }
-  }, [isProne, scale, character.onGround, character.velocityX, isDead]);
+    if (key === 'e') {
+      // E key pressed - trigger portal enter
+      onPortalEnter?.(character.x, character.y);
+      e.preventDefault();
+    }
+  }, [isProne, scale, character.onGround, character.velocityX, character.x, character.y, isDead, onPortalEnter]);
 
   const handleKeyUp = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
@@ -601,7 +618,7 @@ const Character = forwardRef<
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown, openedDoors]);
+  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown, openedDoors, onPortalEnter]);
 
   // Check button presses after character position updates
   useEffect(() => {

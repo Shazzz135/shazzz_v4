@@ -35,10 +35,10 @@ function RouteTransition() {
       className={`route-transition ${isTransitioning ? 'fade-out' : ''}`}
     >
       <Routes location={displayLocation}>
-        <Route path="/play" element={<Play />} />
+        <Route path="/" element={<Play />} />
         <Route path="/world" element={<World />} />
-        <Route path="/" element={<Navigate to="/play" replace />} />
-        <Route path="*" element={<Navigate to="/play" replace />} />
+        <Route path="/" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );

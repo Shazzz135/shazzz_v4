@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { dungeonLevel } from '../data/levelSelectData';
 import { sandboxLevel } from '../data/sandboxData';
 import { processGameObjects } from '../utils/processGameObjects';
@@ -22,6 +23,9 @@ import { UI_OBJECTS } from '../objects/definitions';
  */
 
 export default function World() {
+  // ========== ROUTING ==========
+  const navigate = useNavigate();
+  
   // ========== GRID CONFIGURATION ==========
   const gridCols = 30;
   const gridRows = 16;
@@ -31,7 +35,8 @@ export default function World() {
   
   // ========== STATE ==========
   const [cellSize, setCellSize] = useState(0);
-  const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('sandbox');
+  const [activeDataset, setActiveDataset] = useState<'levelSelect' | 'sandbox'>('levelSelect');
+  void setActiveDataset; // Kept for future use
   const currentLevel = activeDataset === 'levelSelect' ? dungeonLevel : sandboxLevel;
   const gameObjects = processGameObjects(currentLevel.objects); // Process objects to expand scaled addresses
   const [objectFrames, setObjectFrames] = useState<Record<string, number>>({}); // Track frame indices for animations
@@ -42,12 +47,15 @@ export default function World() {
   const [completedDoors, setCompletedDoors] = useState<Set<string>>(new Set()); // Track doors that finished animating and should disappear
   const [doorAnimationDirection, setDoorAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for doors
   const [buttonAnimationDirection, setButtonAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for buttons
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
+  void setShowHitbox; // Kept for debugging
   const [showGrid, setShowGrid] = useState(false); // Toggle grid visibility
   const [characterX, setCharacterX] = useState(0); // Track character X position for goblin AI
   const [characterY, setCharacterY] = useState(0); // Track character Y position for goblin AI
   const [playerHealth, setPlayerHealth] = useState(3); // 3=full (3 hearts), decreases by 0.5 or 1 per hit
   const [heartFlickerState, setHeartFlickerState] = useState(true); // Controls heart flicker visibility during immunity
+  const [portalTeleporting, setPortalTeleporting] = useState(false); // Track if character is teleporting via portal
   const heartInvulnerabilityEndRef = useRef<number | null>(null); // Timestamp when heart immunity ends
   const [goblinHitCounts, setGoblinHitCounts] = useState<Record<string, number>>({}); // Track hits per goblin for display
   const [goblinInGracePeriod, setGoblinInGracePeriod] = useState<Set<string>>(new Set()); // Track which goblins are in grace period
@@ -59,7 +67,7 @@ export default function World() {
   const lastPunchGoblinRef = useRef<string | null>(null); // Prevent same goblin being hit twice in one punch
   const GRACE_PERIOD_MS = 2000; // 2 second grace period between hits
   const animationTickRef = useRef(0);
-  const characterRef = useRef<{ takeDamage: (amount: number) => void }>(null); // Ref to call takeDamage on character
+  const characterRef = useRef<{ takeDamage: (amount: number) => void; teleportTo: (x: number, y: number) => void }>(null); // Ref to call takeDamage and teleportTo on character
 
   useEffect(() => {
     const calculateCellSize = () => {
@@ -442,6 +450,63 @@ export default function World() {
     }
   };
 
+  // Handle portal entry - teleport character to destination
+  const handlePortalEnter = (charX: number, charY: number) => {
+    if (portalTeleporting) return;
+    
+    // Convert character pixel position directly to grid address
+    // charCol = 0-29 (left to right), charRow = 0-15 (top to bottom)
+    const charCol = Math.floor(charX / cellSize);
+    const charRow = Math.floor(charY / cellSize);
+    // Address format: Letter (row A-P) + Number (col 1-30)
+    const charAddress = String.fromCharCode(65 + charRow) + (charCol + 1);
+    
+    console.log(`PORTAL: E pressed at ${charAddress} (pixels: ${Math.round(charX)}, ${Math.round(charY)}, col: ${charCol}, row: ${charRow})`);
+    
+    const portal = gameObjects.find((obj) => {
+      if (obj.type !== 'portal') return false;
+      console.log(`PORTAL: Checking portal addresses: ${obj.address.join(', ')}`);
+      return obj.address.some(addr => addr.startsWith(charAddress));
+    });
+    
+    if (!portal) {
+      console.log(`PORTAL: No portal at ${charAddress}`);
+      return;
+    }
+    
+    // Handle page navigation action
+    if (portal.action?.type === 'navigate') {
+      console.log(`PORTAL: Navigating to ${portal.action.path}`);
+      setPortalTeleporting(true);
+      setTimeout(() => {
+        navigate(portal.action!.path);
+      }, 300);
+      return;
+    }
+    
+    // Handle destination address teleportation
+    if (!portal.destinationAddress) {
+      console.log('PORTAL: No destination');
+      return;
+    }
+    
+    console.log(`PORTAL: Teleporting to ${portal.destinationAddress}`);
+    setPortalTeleporting(true);
+    
+    // Parse destination address: Letter (row) + Number (col)
+    const destRow = portal.destinationAddress.charCodeAt(0) - 65; // Letter A-P = row 0-15
+    const destCol = parseInt(portal.destinationAddress.substring(1)) - 1; // Number 1-30 = col 0-29
+    const destX = destCol * cellSize;
+    const destY = destRow * cellSize;
+    
+    setTimeout(() => {
+      if (characterRef.current) {
+        characterRef.current.teleportTo(destX, destY);
+      }
+      setPortalTeleporting(false);
+    }, 300);
+  };
+
   return (
     <>
       <RotateDeviceScreen />
@@ -454,13 +519,6 @@ export default function World() {
           backgroundColor: '#000000',
         }}
       >
-      {/* Dataset Toggle Button */}
-      <button
-        onClick={() => setActiveDataset(activeDataset === 'levelSelect' ? 'sandbox' : 'levelSelect')}
-        className="absolute top-4 left-4 z-10 px-3 py-2 rounded font-bold text-sm bg-purple-500 text-white hover:bg-purple-600 transition-colors"
-      >
-        {activeDataset === 'levelSelect' ? 'Level Select' : 'Sandbox'}
-      </button>
 
       {/* Grid Toggle Button */}
       <button
@@ -469,16 +527,6 @@ export default function World() {
       >
         {showGrid ? 'Hide Grid' : 'Show Grid'}
       </button>
-
-      {/* Hitbox Toggle Button - not shown on mobile */}
-      {!isMobile && (
-      <button
-        onClick={() => setShowHitbox(!showHitbox)}
-        className="absolute top-4 right-40 z-10 px-3 py-2 rounded font-bold text-sm bg-red-500 text-white hover:bg-red-600 transition-colors"
-      >
-        {showHitbox ? 'Hide Hitbox' : 'Show Hitbox'}
-      </button>
-      )}
 
       <div className="relative" style={{ width: gridCols * cellSize, height: gridRows * cellSize }}>
         {/* Game Objects Layer */}
@@ -502,6 +550,17 @@ export default function World() {
                       />
                     );
                   case 'animated':
+                    return (
+                      <AnimatedObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        frameIndex={frameIndex}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  case 'portal':
                     return (
                       <AnimatedObject
                         key={key}
@@ -710,6 +769,7 @@ export default function World() {
                 setCharacterY(y);
               }}
               onPunch={handlePunch}
+              onPortalEnter={handlePortalEnter}
             />
           </>
         )}

@@ -60,6 +60,12 @@ import crystal2 from '../assets/platforms/crystal/crystal2.svg';
 import crystal3 from '../assets/platforms/crystal/crystal3.svg';
 import crystal4 from '../assets/platforms/crystal/crystal4.svg';
 
+// ========== PORTAL IMPORTS ==========
+import portalRed1 from '../assets/objects/portals/red1.svg';
+import portalRed2 from '../assets/objects/portals/red2.svg';
+import portalBlue1 from '../assets/objects/portals/blue1.svg';
+import portalBlue2 from '../assets/objects/portals/blue2.svg';
+
 export const ANIMATED_OBJECTS = {
   coin: {
     id: 'coin',
@@ -83,6 +89,30 @@ export const ANIMATED_OBJECTS = {
     hitbox: { x: 0, y: 0, width: 32, height: 32 },
     position: { x: 0, y: 0 },
     address: [],
+  },
+  portal: {
+    id: 'portal',
+    type: 'portal' as const,
+    animation: {
+      frames: [portalRed1, portalRed2] as const,
+      speed: 4,
+    },
+    hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
+    position: { x: 0, y: 0 },
+    address: [],
+    isCollectible: true, // No collision - character walks through
+  },
+  portalBlue: {
+    id: 'portal-blue',
+    type: 'portal' as const,
+    animation: {
+      frames: [portalBlue1, portalBlue2] as const,
+      speed: 4,
+    },
+    hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
+    position: { x: 0, y: 0 },
+    address: [],
+    isCollectible: true, // No collision - character walks through
   },
 } as const;
 

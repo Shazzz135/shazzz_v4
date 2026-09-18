@@ -49,7 +49,7 @@ export const ANIMATION_SPEED: Record<AnimationState, number> = {
   running: 6,
   jumping: 3,
   punching: 5,
-  prone: 2,
+  prone: 6,
 };
 
 // Object animations

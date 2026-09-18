@@ -21,7 +21,7 @@ export interface ObjectAnimation {
 
 export interface GameObject {
   id: string; // Unique identifier for the object type
-  type: 'block' | 'animated' | 'input' | 'output' | 'ui'; // Object category
+  type: 'block' | 'animated' | 'input' | 'output' | 'ui' | 'portal'; // Object category
   img?: string; // Path to sprite asset (optional if animation exists)
   animation?: ObjectAnimation; // Animation frames and speed (optional)
   hitbox: Hitbox; // Collision boundaries
@@ -30,4 +30,6 @@ export interface GameObject {
   isCollectible?: boolean; // If true, object has no collision (for coins, items, etc.)
   gridSize?: { width: number; height: number }; // Grid size in cells (default: 1x1). Set by parsing address notation.
   linkedObjectId?: string; // For input/output objects: ID of linked object (button to trapdoor)
+  destinationAddress?: string; // For portal objects: grid address where portal teleports player
+  action?: { type: 'navigate'; path: string }; // For portal objects: action to perform (e.g., navigate to another page)
 }
