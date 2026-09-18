@@ -563,7 +563,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
           }}
         >
           {/* Render full hearts for remaining health */}
-          {Array.from({ length: Math.max(0, 3 - hitCount) }).map((_, i) => (
+          {Array.from({ length: Math.max(0, 1 - hitCount) }).map((_, i) => (
             <img
               key={`full-${i}`}
               src={heartFull}

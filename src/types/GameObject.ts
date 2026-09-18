@@ -21,7 +21,7 @@ export interface ObjectAnimation {
 
 export interface GameObject {
   id: string; // Unique identifier for the object type
-  type: 'block' | 'animated' | 'input' | 'output'; // Object category
+  type: 'block' | 'animated' | 'input' | 'output' | 'ui'; // Object category
   img?: string; // Path to sprite asset (optional if animation exists)
   animation?: ObjectAnimation; // Animation frames and speed (optional)
   hitbox: Hitbox; // Collision boundaries

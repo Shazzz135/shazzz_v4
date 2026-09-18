@@ -12,10 +12,10 @@
 import type { GameObject } from '../types/GameObject';
 
 // ========== BLOCK OBJECTS (Static, no animation) ==========
-import grassFull from '/world/blocks/grass_full.svg';
-import grassHalf from '/world/blocks/grass_half.svg';
-import stoneFull from '/world/blocks/stone_full.svg';
-import stoneHalf from '/world/blocks/stone_half.svg';
+import grassFull from '../assets/blocks/grass_full.svg';
+import grassHalf from '../assets/blocks/grass_half.svg';
+import stoneFull from '../assets/blocks/stone_full.svg';
+import stoneHalf from '../assets/blocks/stone_half.svg';
 
 export const BLOCK_OBJECTS = {
   grassFull: {
@@ -189,6 +189,38 @@ export const OUTPUT_OBJECTS = {
   },
 } as const;
 
+// ========== UI OBJECTS (Hearts, Health) ==========
+import heartFull from '../assets/ui/heart/heart_full.svg';
+import heartHalf from '../assets/ui/heart/heart_half.svg';
+import heartEmpty from '../assets/ui/heart/heart_empty.svg';
+
+export const UI_OBJECTS = {
+  heartFull: {
+    id: 'heart-full',
+    type: 'ui' as const,
+    img: heartFull,
+    hitbox: { x: 0, y: 0, width: 32, height: 32 },
+    position: { x: 0, y: 0 },
+    address: [],
+  },
+  heartHalf: {
+    id: 'heart-half',
+    type: 'ui' as const,
+    img: heartHalf,
+    hitbox: { x: 0, y: 0, width: 32, height: 32 },
+    position: { x: 0, y: 0 },
+    address: [],
+  },
+  heartEmpty: {
+    id: 'heart-empty',
+    type: 'ui' as const,
+    img: heartEmpty,
+    hitbox: { x: 0, y: 0, width: 32, height: 32 },
+    position: { x: 0, y: 0 },
+    address: [],
+  },
+} as const;
+
 /**
  * Helper function to create a GameObject instance
  * Takes a template object and adds position/address information
@@ -211,4 +243,5 @@ export const ALL_GAME_OBJECTS = {
   ...ANIMATED_OBJECTS,
   ...INPUT_OBJECTS,
   ...OUTPUT_OBJECTS,
+  ...UI_OBJECTS,
 } as const;

@@ -1,19 +1,64 @@
 
-import { useState } from 'react';
-import World from './world/World';
-import LoadingScreen from './components/LoadingScreen';
+import { useEffect, useState } from 'react';
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 
-export default function App() {
-  const [isLoading, setIsLoading] = useState(false); // Disabled for now
+import { APP } from './data/data.ts';
+import Play from './pages/Play.tsx';
+import World from './pages/World.tsx';
 
-  const handleLoadingComplete = () => {
-    setIsLoading(false);
-  };
+function RouteTransition() {
+  const location = useLocation();
+  const [displayLocation, setDisplayLocation] = useState(location);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (location.pathname !== displayLocation.pathname) {
+      setIsTransitioning(true);
+      const timer = setTimeout(() => {
+        setDisplayLocation(location);
+        setIsTransitioning(false);
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [location, displayLocation]);
 
   return (
-    <>
-      <LoadingScreen isLoading={isLoading} levelName="Dungeon" onLoadingComplete={handleLoadingComplete} />
-      <World />
-    </>
+    <div
+      key={displayLocation.pathname}
+      className={`route-transition ${isTransitioning ? 'fade-out' : ''}`}
+    >
+      <Routes location={displayLocation}>
+        <Route path="/play" element={<Play />} />
+        <Route path="/world" element={<World />} />
+        <Route path="/" element={<Navigate to="/play" replace />} />
+        <Route path="*" element={<Navigate to="/play" replace />} />
+      </Routes>
+    </div>
   );
 }
+
+function App() {
+  useEffect(() => {
+    document.title = APP.web_name;
+
+    const favicon = document.querySelector("link[rel='icon']");
+
+    if (favicon) {
+      favicon.setAttribute('href', APP.web_logo);
+    }
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <RouteTransition />
+    </BrowserRouter>
+  );
+}
+
+export default App;

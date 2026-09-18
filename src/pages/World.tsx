@@ -12,6 +12,7 @@ import BlockObject from '../objects/BlockObject';
 import AnimatedObject from '../objects/AnimatedObject';
 import InputObject from '../objects/InputObject';
 import OutputObject from '../objects/OutputObject';
+import { UI_OBJECTS } from '../objects/definitions';
 
 /**
  * Universal Level/Game Scene Component
@@ -322,7 +323,7 @@ export default function World() {
       setGoblinHitCounts((prev) => ({ ...prev, [npc.id]: currentHits }));
 
       // Check if defeated
-      if (currentHits >= 3) {
+      if (currentHits >= 1) {
         goblinDefeatedRef.current.add(npc.id);
         anyDefeated = true;
       }
@@ -720,7 +721,7 @@ export default function World() {
           {/* Heart 1 (A1x2) - Leftmost, dies last - represents 0-1 health */}
           <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
             <img
-              src={playerHealth >= 1 ? '/ui/heart/heart_full.svg' : playerHealth >= 0.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              src={playerHealth >= 1 ? UI_OBJECTS.heartFull.img : playerHealth >= 0.5 ? UI_OBJECTS.heartHalf.img : UI_OBJECTS.heartEmpty.img}
               alt="Heart 1"
               style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
             />
@@ -728,7 +729,7 @@ export default function World() {
           {/* Heart 2 (A4x2) - Middle - represents 1-2 health */}
           <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
             <img
-              src={playerHealth >= 2 ? '/ui/heart/heart_full.svg' : playerHealth >= 1.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              src={playerHealth >= 2 ? UI_OBJECTS.heartFull.img : playerHealth >= 1.5 ? UI_OBJECTS.heartHalf.img : UI_OBJECTS.heartEmpty.img}
               alt="Heart 2"
               style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
             />
@@ -736,7 +737,7 @@ export default function World() {
           {/* Heart 3 (A7x2) - Rightmost, dies first - represents 2-3 health */}
           <div style={{ width: cellSize * 2, height: cellSize * 2 }}>
             <img
-              src={playerHealth >= 3 ? '/ui/heart/heart_full.svg' : playerHealth >= 2.5 ? '/ui/heart/heart_half.svg' : '/ui/heart/heart_empty.svg'}
+              src={playerHealth >= 3 ? UI_OBJECTS.heartFull.img : playerHealth >= 2.5 ? UI_OBJECTS.heartHalf.img : UI_OBJECTS.heartEmpty.img}
               alt="Heart 3"
               style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: heartFlickerState ? 1 : 0.3, transition: 'opacity 0.05s' }}
             />

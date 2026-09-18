@@ -693,15 +693,17 @@ const Character = forwardRef<
 
     // Update animation frames at specified speed
     const animationInterval = setInterval(() => {
+      // Freeze prone animation when not moving
+      if (newAnimState === 'prone' && character.velocityX === 0) {
+        // Stay on first frame while prone and stationary
+        setFrameIndex(0);
+        animationTickRef.current = 0;
+        return;
+      }
+
       animationTickRef.current++;
       
-      // For prone: freeze animation when stationary, speed 10 when moving
-      let speed: number;
-      if (newAnimState === 'prone') {
-        speed = character.velocityX !== 0 ? 10 : Infinity; // Infinity means never update frame
-      } else {
-        speed = ANIMATION_SPEED[newAnimState] || 10;
-      }
+      const speed = ANIMATION_SPEED[newAnimState] || 10;
 
       if (animationTickRef.current >= speed) {
         animationTickRef.current = 0;
@@ -709,18 +711,22 @@ const Character = forwardRef<
           const frameList = ANIMATION_FRAMES[newAnimState as AnimationState];
           const maxFrames = frameList?.length || 1;
 
-          // Special handling for jumping animation
-          if (newAnimState === 'jumping' && prev === 0) {
-            return 1;
-          } else if (newAnimState === 'jumping' && prev === 1 && !character.onGround) {
-            return 1;
-          } else if (newAnimState === 'jumping' && character.onGround) {
-            return 0;
+          // Jumping animation: hold frame 1 until landing
+          if (newAnimState === 'jumping') {
+            if (prev === 0) {
+              return 1; // Move to frame 1 on takeoff
+            }
+            // Stay on frame 1 until grounded, then reset to 0
+            if (character.onGround) {
+              return 0;
+            }
+            return 1; // Hold frame 1 while in air
           }
 
+          // Normal frame progression
           const nextFrame = (prev + 1) % maxFrames;
 
-          // Auto-exit punch animation after completion
+          // Auto-exit punch animation after one complete cycle
           if (newAnimState === 'punching' && nextFrame === 0) {
             setIsPunching(false);
           }
@@ -738,6 +744,11 @@ const Character = forwardRef<
   const frames = isDead ? DEATH_FRAMES : ANIMATION_FRAMES[animationState as AnimationState];
   const currentFrame = frames[Math.min(frameIndex, frames.length - 1)] || frames[0];
 
+  // Calculate scaling and positioning for prone state
+  const isProneState = animationState === 'prone';
+  const proneScale = isProneState ? 1.25 : 1;
+  const proneYOffset = isProneState ? character.height * 0 : 0; // Raise prone image by 25% of height
+
   return (
     <>
       <img
@@ -745,10 +756,10 @@ const Character = forwardRef<
         alt="character"
         className="absolute"
         style={{
-          width: `${character.width}px`,
-          height: `${character.height}px`,
+          width: `${character.width * proneScale}px`,
+          height: `${character.height * proneScale}px`,
           objectFit: 'contain',
-          transform: `translate(${character.x}px, ${character.y}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
+          transform: `translate(${character.x - (character.width * (proneScale - 1)) / 2}px, ${character.y + proneYOffset - (character.height * (proneScale - 1)) / 2}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
           pointerEvents: 'none',
           opacity: isInvulnerable && !flickerState ? 0 : 1, // Flicker during immunity
           transition: 'opacity 0.05s', // Smooth opacity changes
