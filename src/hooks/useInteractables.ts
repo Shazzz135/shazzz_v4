@@ -9,6 +9,11 @@ import type { GameObject } from '../types/GameObject';
  * Animation coordination is handled by the animation system which watches these states
  */
 
+interface CharacterRef {
+  takeDamage: (amount: number, source: string) => void;
+  teleportTo: (x: number, y: number) => void;
+}
+
 export function useInteractables(gameObjects: GameObject[]) {
   const navigate = useNavigate();
   const [activatedSwitches, setActivatedSwitches] = useState<Set<string>>(new Set());
@@ -64,7 +69,7 @@ export function useInteractables(gameObjects: GameObject[]) {
    * Supports page navigation via action property
    */
   const handlePortalEnter = useCallback(
-    (charX: number, charY: number, cellSize: number, characterRef: any) => {
+    (charX: number, charY: number, cellSize: number, characterRef: React.MutableRefObject<CharacterRef | null>) => {
       if (portalTeleporting) return;
 
       const charCol = Math.floor(charX / cellSize);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NPC } from '../types/NPC';
+import type { GameObject } from '../types/GameObject';
 import type { GoblinHandle } from '../components/Goblin';
 
 /**
@@ -10,7 +11,7 @@ import type { GoblinHandle } from '../components/Goblin';
 const GRACE_PERIOD_MS = 2000; // 2 second grace period between goblin hits
 
 export function useCharacterCombat(
-  gameObjects: any[],
+  gameObjects: GameObject[],
   currentLevelNpcs: NPC[] | undefined,
   isMobile: boolean,
 ) {

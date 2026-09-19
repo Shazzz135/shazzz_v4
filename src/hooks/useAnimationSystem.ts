@@ -36,7 +36,8 @@ export function useAnimationSystem(
 
   // Initialize button/door animations when switches/doors are activated or deactivated
   useEffect(() => {
-    setState((prev) => {
+    // Calculate changes without calling setState directly in effect body
+    const calculateNextState = (prev: AnimationSystemState): AnimationSystemState => {
       const newState = { ...prev };
       let changed = false;
 
@@ -106,7 +107,9 @@ export function useAnimationSystem(
       });
 
       return changed ? newState : prev;
-    });
+    };
+
+    setState(calculateNextState);
   }, [gameObjects, activatedSwitches, openedDoors]);
 
   // Animation loop for all objects
