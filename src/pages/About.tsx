@@ -54,7 +54,7 @@ export default function About() {
   // ========== STATE & REFS ==========
   const [characterPos, setCharacterPos] = useState({ x: 0, y: 0 });
   const characterRef = useRef<{ takeDamage: (amount: number) => void; teleportTo: (x: number, y: number) => void }>(null);
-  const goblinRefsRef = useRef<Record<string, any>>({});
+  const goblinRefsRef = useRef<Record<string, { takeDamage: (amount: number) => void }>({});
   const [defeatedGoblins, setDefeatedGoblins] = useState(new Set<string>());
   const [goblinHitCounts, setGoblinHitCounts] = useState<Record<string, number>>({});
   const [_goblinInGracePeriod] = useState(new Set<string>());
@@ -128,7 +128,7 @@ export default function About() {
         }
       }
     }
-  }, [currentLevel.npcs]);
+  }, [currentLevel.npcs, goblinRefsRef]);
 
   const handleGoblinAttack = useCallback(() => {
     // Goblin deals 0.5 hearts of damage to player
@@ -210,7 +210,11 @@ export default function About() {
                   <Goblin
                     key={npc.id}
                     ref={(ref) => {
-                      if (ref) goblinRefsRef.current[npc.id] = ref;
+                      if (ref) {
+                        queueMicrotask(() => {
+                          goblinRefsRef.current[npc.id] = ref;
+                        });
+                      }
                     }}
                     id={npc.id}
                     address={npc.address}

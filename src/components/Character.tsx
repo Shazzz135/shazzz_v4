@@ -296,7 +296,7 @@ const Character = forwardRef<
         }
       }
     }
-  }, [isInvulnerable, gameObjects, cellSize, scale, onSpikeHit]);
+  }, [isInvulnerable, gameObjects, cellSize, onSpikeHit]);
 
   // Helper function to check for button collision and trigger button press
   // Only activates when character is standing ON TOP of the button, not from sides

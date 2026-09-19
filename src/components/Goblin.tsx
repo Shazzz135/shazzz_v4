@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import walking1 from '../assets/goblin/walking/walking1.svg';
 import walking2 from '../assets/goblin/walking/walking2.svg';
 import walking3 from '../assets/goblin/walking/walking3.svg';
@@ -92,7 +92,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   const gridPixelHeight = gridHeight * cellSize;
 
   // Helper function to convert grid address to pixel coordinates
-  const getPixelPositionFromAddress = (addr: string): { x: number; y: number } => {
+  const getPixelPositionFromAddress = useCallback((addr: string): { x: number; y: number } => {
     const cleanAddr = addr.replace(/[FLDR]$/, ''); // Remove any direction suffixes
     const row = cleanAddr.charCodeAt(0) - 65; // Letter A-P becomes row
     const col = parseInt(cleanAddr.substring(1)) - 1; // Number 1-30 becomes col
@@ -100,12 +100,12 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
       x: col * cellSize,
       y: row * cellSize,
     };
-  };
+  }, [cellSize]);
 
   // Calculate initial spawn position - just use address directly like Character does
-  const calculateInitialSpawnPos = (): { x: number; y: number } => {
+  const calculateInitialSpawnPos = useCallback((): { x: number; y: number } => {
     return getPixelPositionFromAddress(address);
-  };
+  }, [address, getPixelPositionFromAddress]);
 
   const initialPos = calculateInitialSpawnPos();
 
@@ -193,7 +193,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
       x: newPos.x,
       y: newPos.y,
     }));
-  }, [cellSize, address]);
+  }, [cellSize, address, calculateInitialSpawnPos]);
 
   // Check attack collision and damage character
   useEffect(() => {
