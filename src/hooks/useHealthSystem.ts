@@ -24,16 +24,16 @@ export function useHealthSystem() {
       if (flickerIntervalRef.current) clearInterval(flickerIntervalRef.current);
       if (invulnerabilityCheckIntervalRef.current) clearInterval(invulnerabilityCheckIntervalRef.current);
 
-      // Start flicker
-      setHeartFlickerState(true);
       heartInvulnerabilityEndRef.current = Date.now() + 3000; // 3 second immunity
+
+      // Start flicker animation - initial state set deferred
+      queueMicrotask(() => {
+        setHeartFlickerState(false);
+      });
 
       flickerIntervalRef.current = setInterval(() => {
         setHeartFlickerState((prev) => !prev);
       }, 200);
-
-      // Trigger first flicker immediately
-      queueMicrotask(() => setHeartFlickerState((prev) => !prev));
 
       invulnerabilityCheckIntervalRef.current = setInterval(() => {
         if (heartInvulnerabilityEndRef.current && Date.now() >= heartInvulnerabilityEndRef.current) {

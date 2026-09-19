@@ -704,7 +704,12 @@ const Character = forwardRef<
     // Reset frame when animation state changes
     if (newAnimState !== animationState) {
       setAnimationState(newAnimState);
-      setFrameIndex(0);
+      // For jumping, immediately show airborne frame (frame 1)
+      if (newAnimState === 'jumping') {
+        setFrameIndex(1);
+      } else {
+        setFrameIndex(0);
+      }
       animationTickRef.current = 0;
     }
 
