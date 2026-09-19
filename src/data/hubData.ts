@@ -6,6 +6,7 @@
 import type { GameObject } from '../types/GameObject';
 import type { NPC } from '../types/NPC';
 import { BLOCK_OBJECTS, ANIMATED_OBJECTS } from '../objects/definitions';
+import { expandAddressRange } from '../utils/addressRangeExpander';
 import dungeon from '../assets/backgrounds/dungeon.webp';
 
 export interface LevelData {
@@ -18,23 +19,24 @@ export interface LevelData {
 }
 
 // Helper function to create a game object instance with position and address
+// Automatically expands address ranges (e.g., 'A-D11' or 'A1-5')
 const createObject = (template: Omit<GameObject, 'position' | 'address'>, position: { x: number; y: number }, address: string[]): GameObject => {
   return {
     ...template,
     position,
-    address,
+    address: expandAddressRange(address),
   };
 };
 
-export const dungeonLevel: LevelData = {
-  id: 'dungeon',
-  name: 'Dungeon',
+export const hubLevel: LevelData = {
+  id: 'hub',
+  name: 'Hub',
   background: dungeon,
   objects: [
     createObject(
       BLOCK_OBJECTS.stoneFull,
       { x: 0, y: 15 * 32 },
-      ['O2', 'O3', 'O4', 'O5F', 'O6', 'O7', 'O8', 'O9', 'O10', 'O11', 'O12', 'O13F', 'O14', 'O15', 'O16', 'O17', 'O18', 'O19', 'O20F', 'O21', 'O22', 'O23', 'O24', 'O25', 'O26', 'O27', 'O28', 'O29', 'J4', 'J5', 'J6', 'J7F', 'J8F', 'J9', 'J22', 'J23', 'J24', 'J25F', 'J26', 'J27', 'L15', 'L16']
+      ['O2-4', 'O5F', 'O6-12', 'O13F', 'O14-19', 'O20F', 'O21-29', 'J4-6', 'J7F', 'J8F', 'J9', 'J22-24', 'J25F', 'J26-27', 'L15-16']
     ),
     createObject(
       BLOCK_OBJECTS.stoneHalf,
@@ -235,11 +237,11 @@ export const dungeonLevel: LevelData = {
 };
 
 // Alias for backward compatibility
-export const sandboxLevel: LevelData = dungeonLevel;
+export const sandboxLevel: LevelData = hubLevel;
 
 // Available levels for selection
 export const AVAILABLE_LEVELS = [
-  dungeonLevel,
+  hubLevel,
 ];
 
 // Get level by ID

@@ -91,11 +91,11 @@ export const ANIMATED_OBJECTS = {
     address: [],
   },
   portalRed: {
-    id: 'portal',
+    id: 'portal-red',
     type: 'portal' as const,
     animation: {
       frames: [portalRed1, portalRed2] as const,
-      speed: 31, // 2 FPS smooth animation (500ms per frame)
+      speed: 62, // 1 FPS smooth animation (1000ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
@@ -107,7 +107,7 @@ export const ANIMATED_OBJECTS = {
     type: 'portal' as const,
     animation: {
       frames: [portalBlue1, portalBlue2] as const,
-      speed: 31, // 2 FPS smooth animation (500ms per frame)
+      speed: 62, // 1 FPS smooth animation (1000ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
@@ -219,6 +219,21 @@ export const OUTPUT_OBJECTS = {
   },
 } as const;
 
+// ========== TRAP OBJECTS (Hazards that damage the character) ==========
+import spikes from '../assets/objects/traps/spikes.svg';
+
+export const TRAP_OBJECTS = {
+  spikes: {
+    id: 'spikes',
+    type: 'block' as const,
+    img: spikes,
+    hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No collision - damage zone handled by proximity detection
+    position: { x: 0, y: 0 },
+    address: [],
+    damageAmount: 1, // 1 full heart of damage
+  },
+} as const;
+
 // ========== UI OBJECTS (Hearts, Health) ==========
 import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartHalf from '../assets/ui/heart/heart_half.svg';
@@ -279,6 +294,7 @@ export const ALL_GAME_OBJECTS = {
   ...ANIMATED_OBJECTS,
   ...INPUT_OBJECTS,
   ...OUTPUT_OBJECTS,
+  ...TRAP_OBJECTS,
   ...UI_OBJECTS,
   ...TEXT_OBJECTS,
 } as const;

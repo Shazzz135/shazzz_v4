@@ -44,4 +44,5 @@ export interface GameObject {
   linkedObjectId?: string; // For input/output objects: ID of linked object (button to trapdoor)
   destinationAddress?: string; // For portal objects: grid address where portal teleports player
   action?: { type: 'navigate'; path: string }; // For portal objects: action to perform (e.g., navigate to another page)
+  damageAmount?: number; // For trap objects: damage dealt to character in health points
 }
