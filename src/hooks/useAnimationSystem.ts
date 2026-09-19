@@ -34,84 +34,6 @@ export function useAnimationSystem(
     buttonAnimationDirection: {},
   });
 
-  // Initialize button/door animations when switches/doors are activated or deactivated
-  useEffect(() => {
-    // Calculate changes without calling setState directly in effect body
-    const calculateNextState = (prev: AnimationSystemState): AnimationSystemState => {
-      const newState = { ...prev };
-      let changed = false;
-
-      // Handle button animations
-      gameObjects.forEach((obj) => {
-        if (obj.type === 'input' && obj.animation) {
-          const isActive = activatedSwitches.has(obj.id);
-          const wasActive = prev.buttonAnimationDirection[obj.id] === 'forward' || 
-                           Object.keys(prev.buttonAnimationFrames).some(key => 
-                             key.startsWith(`${obj.id}-`) && prev.buttonAnimationFrames[key] > 0
-                           );
-
-          if (isActive !== wasActive) {
-            changed = true;
-            const frameCount = obj.animation.frames.length;
-            const maxFrame = frameCount - 1;
-
-            obj.address.forEach((addr) => {
-              const key = `${obj.id}-${addr}`;
-              if (isActive) {
-                // Activating: start from frame 0, animate forward
-                newState.buttonAnimationFrames[key] = 0;
-                newState.buttonAnimationDirection[obj.id] = 'forward';
-              } else {
-                // Deactivating: start from current or max frame, animate backward
-                newState.buttonAnimationFrames[key] = maxFrame;
-                newState.buttonAnimationDirection[obj.id] = 'backward';
-              }
-            });
-          }
-        }
-      });
-
-      // Handle door animations
-      gameObjects.forEach((obj) => {
-        if (obj.type === 'output' && obj.animation) {
-          const isOpen = openedDoors.has(obj.id);
-          const wasOpen = Object.keys(prev.doorAnimationFrames).some(key => 
-            key.startsWith(`${obj.id}-`) && prev.doorAnimationFrames[key] > 0
-          );
-
-          if (isOpen !== wasOpen) {
-            changed = true;
-            const frameCount = obj.animation.frames.length;
-            const maxFrame = frameCount - 1;
-
-            obj.address.forEach((addr) => {
-              const key = `${obj.id}-${addr}`;
-              if (isOpen) {
-                // Opening: start from frame 0, animate forward
-                newState.doorAnimationFrames[key] = 0;
-                delete newState.doorAnimationDirection[obj.id];
-              } else {
-                // Closing: start from max frame, animate backward
-                newState.doorAnimationFrames[key] = maxFrame;
-                newState.doorAnimationDirection[obj.id] = 'backward';
-              }
-            });
-
-            // Reset completed doors when reopening
-            if (isOpen) {
-              newState.completedDoors = new Set(prev.completedDoors);
-              newState.completedDoors.delete(obj.id);
-            }
-          }
-        }
-      });
-
-      return changed ? newState : prev;
-    };
-
-    setState(calculateNextState);
-  }, [gameObjects, activatedSwitches, openedDoors]);
-
   // Animation loop for all objects
   useEffect(() => {
     const animationLoop = setInterval(() => {
@@ -123,6 +45,62 @@ export function useAnimationSystem(
       const newCompletedDoors = new Set(state.completedDoors);
       const newButtonDirection: Record<string, 'forward' | 'backward'> = { ...state.buttonAnimationDirection };
       const newDoorDir: Record<string, 'forward' | 'backward' | null> = { ...state.doorAnimationDirection };
+
+      // Check for button/door state changes and initialize animations
+      gameObjects.forEach((obj) => {
+        if (obj.type === 'input' && obj.animation) {
+          const isActive = activatedSwitches.has(obj.id);
+          const wasActive = state.buttonAnimationDirection[obj.id] === 'forward' || 
+                           Object.keys(state.buttonAnimationFrames).some(key => 
+                             key.startsWith(`${obj.id}-`) && state.buttonAnimationFrames[key] > 0
+                           );
+
+          // If state changed, initialize frames
+          if (isActive !== wasActive) {
+            const frameCount = obj.animation.frames.length;
+            const maxFrame = frameCount - 1;
+
+            obj.address.forEach((addr) => {
+              const key = `${obj.id}-${addr}`;
+              if (isActive) {
+                newButtonFrames[key] = 0;
+                newButtonDirection[obj.id] = 'forward';
+              } else {
+                newButtonFrames[key] = maxFrame;
+                newButtonDirection[obj.id] = 'backward';
+              }
+            });
+          }
+        }
+
+        if (obj.type === 'output' && obj.animation) {
+          const isOpen = openedDoors.has(obj.id);
+          const wasOpen = Object.keys(state.doorAnimationFrames).some(key => 
+            key.startsWith(`${obj.id}-`) && state.doorAnimationFrames[key] > 0
+          );
+
+          // If state changed, initialize frames
+          if (isOpen !== wasOpen) {
+            const frameCount = obj.animation.frames.length;
+            const maxFrame = frameCount - 1;
+
+            obj.address.forEach((addr) => {
+              const key = `${obj.id}-${addr}`;
+              if (isOpen) {
+                newDoorFrames[key] = 0;
+                delete newDoorDir[obj.id];
+              } else {
+                newDoorFrames[key] = maxFrame;
+                newDoorDir[obj.id] = 'backward';
+              }
+            });
+
+            if (isOpen) {
+              newCompletedDoors.delete(obj.id);
+            }
+          }
+        }
+      });
 
       gameObjects.forEach((obj) => {
         if (obj.animation) {
