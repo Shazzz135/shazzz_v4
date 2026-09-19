@@ -22,6 +22,7 @@ export function useGameObjectsLayer(
   characterX: number,
   characterY: number,
   showHitbox: boolean,
+  collectedItems: Set<string> = new Set(),
 ) {
   if (cellSize <= 0) {
     return null;
@@ -31,6 +32,11 @@ export function useGameObjectsLayer(
     <div className="absolute inset-0">
       {gameObjects.map((obj) => {
         return obj.address.map((addr) => {
+          // Skip rendering collected items
+          if (collectedItems.has(addr)) {
+            return null;
+          }
+
           const key = `${obj.id}-${addr}`;
           const frameIndex = objectFrames[key] ?? 0;
 

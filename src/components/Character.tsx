@@ -39,6 +39,7 @@ interface CharacterProps {
   onDeath?: () => void; // Called when character dies (health = 0)
   onSpikeHit?: (spikeAddress: string) => void;
   onButtonPress?: (buttonObjectId: string) => void; // Called when character collides with input object
+  onCollectItem?: (itemAddress: string) => void; // Called when character collects a collectible item
   openedDoors?: Set<string>; // Track which doors are currently opened
   onPositionChange?: (x: number, y: number) => void; // Called when character position changes
   onPunch?: (x: number, y: number, width: number, height: number) => void; // Called when character punches with hitbox info
@@ -47,8 +48,9 @@ interface CharacterProps {
 
 // Helper function to convert grid address to pixel coordinates
 const getPixelPositionFromAddress = (address: string, cellSize: number): { x: number; y: number } => {
-  const row = address.charCodeAt(0) - 65;
-  const col = parseInt(address.substring(1)) - 1;
+  const cleanAddr = address.replace(/[FLDR]$/, ''); // Remove any direction suffixes
+  const row = cleanAddr.charCodeAt(0) - 65;
+  const col = parseInt(cleanAddr.substring(1)) - 1;
   return {
     x: col * cellSize,
     y: row * cellSize,
@@ -73,6 +75,7 @@ const Character = forwardRef<
   onDeath,
   onSpikeHit,
   onButtonPress,
+  onCollectItem,
   openedDoors = new Set(),
   onPositionChange,
   onPunch,
@@ -197,6 +200,9 @@ const Character = forwardRef<
     const checkZoneBottom = headTop + clearanceAmount;
     
     for (const obj of gameObjects) {
+      // Skip collectible items (they shouldn't block movement)
+      if (obj.isCollectible) continue;
+
       for (const addr of obj.address) {
         const cleanAddr = getCleanAddress(addr);
         const rowLetter = cleanAddr.charCodeAt(0);
@@ -234,20 +240,10 @@ const Character = forwardRef<
   }, [gameObjects, cellSize, scale]);
 
   // Helper function to check for spike collision and deal damage
-  const checkSpikeDamage = useCallback((char: CharacterState, currentAnimState: AnimationState) => {
+  const checkSpikeDamage = useCallback((char: CharacterState) => {
     if (isInvulnerable) return; // Skip if already invulnerable
 
-    const config = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
-    const charHitbox = {
-      x: char.x + config.offsetX * scale * 0.95,
-      y: char.y + config.offsetY * scale * 0.95,
-      width: config.width * scale * 0.95,
-      height: config.height * scale * 0.95,
-      right: char.x + config.offsetX * scale * 0.95 + config.width * scale * 0.95,
-      bottom: char.y + config.offsetY * scale * 0.95 + config.height * scale * 0.95,
-    };
-
-    // Find spike objects and check for collision
+    // Find spike objects and check for collision (address-based detection)
     for (const obj of gameObjects) {
       if (obj.id !== 'spikes') continue;
 
@@ -257,29 +253,17 @@ const Character = forwardRef<
         const gridY = (rowLetter - 65) * cellSize;
         const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
 
-        // Scale spike hitbox to match current cellSize (hitboxes defined at 32px base)
-        const HITBOX_BASE_SIZE = 32;
-        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
-        const scaledWidth = obj.hitbox.width * scaleFactor;
-        const scaledHeight = obj.hitbox.height * scaleFactor;
-        const scaledOffsetX = obj.hitbox.x * scaleFactor;
-        const scaledOffsetY = obj.hitbox.y * scaleFactor;
+        // Check if character center is within spike grid cell
+        const charCenterX = char.x + char.width / 2;
+        const charCenterY = char.y + char.height / 2;
+        
+        const charOverlapsSpike =
+          charCenterX >= gridX &&
+          charCenterX <= gridX + cellSize &&
+          charCenterY >= gridY &&
+          charCenterY <= gridY + cellSize;
 
-        // Get spike hitbox (scaled to screen size)
-        const spikeHitbox = {
-          x: gridX + scaledOffsetX,
-          y: gridY + scaledOffsetY,
-          right: gridX + scaledOffsetX + scaledWidth,
-          bottom: gridY + scaledOffsetY + scaledHeight,
-        };
-
-        // Check overlap
-        if (
-          charHitbox.x < spikeHitbox.right &&
-          charHitbox.right > spikeHitbox.x &&
-          charHitbox.y < spikeHitbox.bottom &&
-          charHitbox.bottom > spikeHitbox.y
-        ) {
+        if (charOverlapsSpike) {
           // Check if spike was hit in the last 3 seconds
           const now = Date.now();
           const lastHitTime = lastSpikeHitTimeRef.current[addr] ?? 0;
@@ -287,9 +271,10 @@ const Character = forwardRef<
           const CAN_HIT_AGAIN = timeSinceLastHit >= 3000; // 3 second cooldown
 
           if (CAN_HIT_AGAIN) {
-            // Deal damage (0.5 = half a heart)
+            // Deal damage (use damageAmount from object definition, default to 1)
+            const damageAmount = obj.damageAmount ?? 1;
             setHealth((prev) => {
-              const newHealth = Math.max(prev - 0.5, 0);
+              const newHealth = Math.max(prev - damageAmount, 0);
               return newHealth;
             });
 
@@ -311,7 +296,7 @@ const Character = forwardRef<
         }
       }
     }
-  }, [isInvulnerable, gameObjects, cellSize, scale, onSpikeHit]);
+  }, [isInvulnerable, gameObjects, cellSize, onSpikeHit]);
 
   // Helper function to check for button collision and trigger button press
   // Only activates when character is standing ON TOP of the button, not from sides
@@ -385,6 +370,74 @@ const Character = forwardRef<
     // Update the currently overlapping buttons for next frame
     currentlyOverlappingButtonsRef.current = currentlyOverlappingThisFrame;
   }, [gameObjects, cellSize, onButtonPress]);
+
+  // Check for collectible item collisions
+  const checkCollectibleItems = useCallback((char: CharacterState) => {
+    // Determine current animation state for accurate hitbox
+    let physicsAnimState: AnimationState = 'idle';
+    if (isPunching) {
+      physicsAnimState = 'punching';
+    } else if (isProne) {
+      physicsAnimState = 'prone';
+    } else if (char.isJumping || (char.velocityY !== 0 && !char.onGround)) {
+      physicsAnimState = 'jumping';
+    } else if (char.velocityX !== 0) {
+      physicsAnimState = 'running';
+    }
+
+    // Get hitbox config for current animation state
+    const baseHitboxConfig = HITBOX_CONFIG[physicsAnimState];
+    const scaledHitboxConfig = {
+      width: baseHitboxConfig.width * scale * 0.95,
+      height: baseHitboxConfig.height * scale * 0.95,
+      offsetX: baseHitboxConfig.offsetX * scale * 0.95,
+      offsetY: baseHitboxConfig.offsetY * scale * 0.95,
+    };
+
+    // Character hitbox with proper offsets
+    const charHitbox = {
+      x: char.x + scaledHitboxConfig.offsetX,
+      y: char.y + scaledHitboxConfig.offsetY,
+      right: char.x + scaledHitboxConfig.offsetX + scaledHitboxConfig.width,
+      bottom: char.y + scaledHitboxConfig.offsetY + scaledHitboxConfig.height,
+    };
+
+    for (const obj of gameObjects) {
+      if (!obj.isCollectible) continue;
+
+      for (const addr of obj.address) {
+        const cleanAddr = getCleanAddress(addr);
+        const rowLetter = cleanAddr.charCodeAt(0);
+        const gridY = (rowLetter - 65) * cellSize;
+        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
+
+        const HITBOX_BASE_SIZE = 32;
+        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
+        const scaledWidth = obj.hitbox.width * scaleFactor;
+        const scaledHeight = obj.hitbox.height * scaleFactor;
+        const scaledOffsetX = obj.hitbox.x * scaleFactor;
+        const scaledOffsetY = obj.hitbox.y * scaleFactor;
+
+        const itemHitbox = {
+          x: gridX + scaledOffsetX,
+          y: gridY + scaledOffsetY,
+          right: gridX + scaledOffsetX + scaledWidth,
+          bottom: gridY + scaledOffsetY + scaledHeight,
+        };
+
+        // Check collision
+        const colliding =
+          charHitbox.x < itemHitbox.right &&
+          charHitbox.right > itemHitbox.x &&
+          charHitbox.y < itemHitbox.bottom &&
+          charHitbox.bottom > itemHitbox.y;
+
+        if (colliding) {
+          onCollectItem?.(addr);
+        }
+      }
+    }
+  }, [gameObjects, cellSize, onCollectItem, isPunching, isProne, scale]);
 
   // ========== INPUT HANDLING ==========
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -599,7 +652,7 @@ const Character = forwardRef<
         }
 
         // Check for spike damage
-        checkSpikeDamage(newChar, physicsAnimState);
+        checkSpikeDamage(newChar);
 
         return newChar;
       });
@@ -624,6 +677,11 @@ const Character = forwardRef<
   useEffect(() => {
     checkButtonPress(character);
   }, [character, checkButtonPress]);
+
+  // Check for collectible item pickups after character position updates
+  useEffect(() => {
+    checkCollectibleItems(character);
+  }, [character, checkCollectibleItems]);
 
   // Call position change callback when character moves
   useEffect(() => {

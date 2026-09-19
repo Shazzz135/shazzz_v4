@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import walking1 from '../assets/goblin/walking/walking1.svg';
 import walking2 from '../assets/goblin/walking/walking2.svg';
 import walking3 from '../assets/goblin/walking/walking3.svg';
@@ -32,6 +32,7 @@ interface GoblinProps {
   hitCount?: number; // Current hit count (0-3)
   isInGracePeriod?: boolean; // Whether goblin is currently invulnerable
   onAttackHit?: () => void; // Called when goblin's attack hits the character
+  onMount?: (id: string, ref: GoblinHandle) => void; // Called when goblin mounts to register ref
 }
 
 interface GoblinState {
@@ -57,7 +58,7 @@ const GRAVITY = 0.6;
 const MAX_VELOCITY_Y = 8;
 const ANIMATION_SPEED = 6; // Frames before switching animation frame
 const ATTACK_ANIMATION_SPEED = 16; // Slower attack animation
-const DEATH_ANIMATION_SPEED = 12; // Death animation speed
+const DEATH_ANIMATION_SPEED = 24; // Death animation speed (slowed by half)
 const WALK_FRAMES = [walking1, walking2, walking3, walking4];
 const ATTACK_FRAMES = [walking1, attack1]; // Attack animation alternates between walking and attack frames
 const DEATH_FRAMES = [death1, death2, death3]; // Death animation sequence
@@ -82,6 +83,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
     hitCount = 0,
     isInGracePeriod = false,
     onAttackHit,
+    onMount,
   },
   ref
 ) {
@@ -92,48 +94,20 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   const gridPixelHeight = gridHeight * cellSize;
 
   // Helper function to convert grid address to pixel coordinates
-  const getPixelPositionFromAddress = (addr: string): { x: number; y: number } => {
-    const row = addr.charCodeAt(0) - 65;
-    const col = parseInt(addr.substring(1)) - 1;
+  const getPixelPositionFromAddress = useCallback((addr: string): { x: number; y: number } => {
+    const cleanAddr = addr.replace(/[FLDR]$/, ''); // Remove any direction suffixes
+    const row = cleanAddr.charCodeAt(0) - 65; // Letter A-P becomes row
+    const col = parseInt(cleanAddr.substring(1)) - 1; // Number 1-30 becomes col
     return {
       x: col * cellSize,
       y: row * cellSize,
     };
-  };
+  }, [cellSize]);
 
-  // Calculate initial spawn position with ground collision
-  const calculateInitialSpawnPos = (): { x: number; y: number } => {
-    const addressPos = getPixelPositionFromAddress(address);
-
-    // Find the ground level at this X position
-    let groundY = gridPixelHeight - height; // Default to bottom of grid
-
-    for (const obj of gameObjects) {
-      if (obj.isCollectible || obj.type === 'input') continue;
-      if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
-
-      for (const addr of obj.address) {
-        const cleanAddr = getCleanAddress(addr);
-        const objHitbox = getObjectHitbox(cellSize, cleanAddr, obj.hitbox);
-
-        // Check if goblin X position overlaps with object horizontally
-        const isOverlappingX = addressPos.x < objHitbox.right && addressPos.x + width > objHitbox.x;
-
-        // If object is at or below spawn address, goblin should land on top of it
-        if (isOverlappingX && objHitbox.y >= addressPos.y) {
-          // Track highest ground surface (lowest Y value that's still below spawn)
-          if (objHitbox.y < groundY + height) {
-            groundY = objHitbox.y - height;
-          }
-        }
-      }
-    }
-
-    return {
-      x: addressPos.x,
-      y: Math.max(addressPos.y, groundY),
-    };
-  };
+  // Calculate initial spawn position - just use address directly like Character does
+  const calculateInitialSpawnPos = useCallback((): { x: number; y: number } => {
+    return getPixelPositionFromAddress(address);
+  }, [address, getPixelPositionFromAddress]);
 
   const initialPos = calculateInitialSpawnPos();
 
@@ -212,6 +186,16 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
       height: newHeight,
     }));
   }, [scale]);
+
+  // Recalculate spawn position when cellSize or address changes
+  useEffect(() => {
+    const newPos = calculateInitialSpawnPos();
+    setGoblin((prevGoblin) => ({
+      ...prevGoblin,
+      x: newPos.x,
+      y: newPos.y,
+    }));
+  }, [cellSize, address, calculateInitialSpawnPos]);
 
   // Check attack collision and damage character
   useEffect(() => {

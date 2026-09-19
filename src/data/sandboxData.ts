@@ -6,6 +6,7 @@
 import type { GameObject } from '../types/GameObject';
 import type { NPC } from '../types/NPC';
 import { BLOCK_OBJECTS } from '../objects/definitions';
+import { expandAddressRange } from '../utils/addressRangeExpander';
 import dungeon from '../assets/backgrounds/dungeon.webp';
 
 export interface LevelData {
@@ -16,11 +17,12 @@ export interface LevelData {
 }
 
 // Helper function to create a game object instance with position and address
+// Automatically expands address ranges (e.g., 'A-D11' or 'A1-5')
 const createObject = (template: Omit<GameObject, 'position' | 'address'>, position: { x: number; y: number }, address: string[]): GameObject => {
   return {
     ...template,
     position,
-    address,
+    address: expandAddressRange(address),
   };
 };
 
@@ -30,7 +32,7 @@ export const sandboxLevel: LevelData = {
     createObject(
       BLOCK_OBJECTS.grassFull,
       { x: 4 * 32, y: 9 * 32 },
-      ['J5', 'J6', 'J7', 'J8', 'M1', 'M2', 'O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10', 'O11', 'O12', 'O13', 'O14', 'O15', 'O16', 'O17', 'O18', 'O19', 'O20', 'O21', 'O22', 'O23', 'O24', 'O25', 'O26', 'O27', 'O28', 'O29', 'O30', 'M20', 'M21', 'M22', 'M23', 'M24', 'M25', 'M26', 'M27', 'M28', 'M29', 'M30', 'K25', 'K26', 'K27', 'K28', 'K29', 'K30']
+      ['J5-8', 'M1-2', 'O1-30', 'M20-30', 'K25-30']
     )
   ],
   characterSpawn: 'M8',
@@ -40,6 +42,11 @@ export const sandboxLevel: LevelData = {
       id: 'goblin-1',
       type: 'goblin',
       address: 'K1',
+    },
+    {
+      id: 'goblin-2',
+      type: 'goblin',
+      address: 'O19',
     },
   ],
 };

@@ -29,7 +29,7 @@ export function useHealthUI(
     };
 
     return (
-      <div key={`heart-${heartIndex}`} style={{ width: cellSize * 2, height: cellSize * 2 }}>
+      <div key={`heart-${heartIndex}`} style={{ width: cellSize * 0.8, height: cellSize * 0.8 }}>
         <img
           src={heartImages[heartState]}
           alt={`Heart ${heartIndex + 1}`}

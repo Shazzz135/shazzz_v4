@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { dungeonLevel } from '../data/hubData';
+import { hubLevel } from '../data/hubData';
 import { processGameObjects } from '../utils/processGameObjects';
 import Character from '../components/Character';
 import MobileControls from '../components/MobileControls';
@@ -23,7 +23,7 @@ import {
  * Dynamically scales to fit screen while maintaining 30×16 grid layout
  */
 
-export default function World() {
+export default function Hub() {
   // ========== GRID CONFIGURATION ==========
   const gridCols = 30;
   const gridRows = 16;
@@ -31,7 +31,7 @@ export default function World() {
   const isMobile = /iPhone|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   // ========== LEVEL DATA ==========
-  const currentLevel = dungeonLevel; // Hub only uses dungeon level
+  const currentLevel = hubLevel; // Hub only uses dungeon level
   const gameObjects = processGameObjects(currentLevel.objects);
 
   // ========== SCENE SETUP ==========
@@ -48,7 +48,7 @@ export default function World() {
   const { playerHealth, setPlayerHealth, heartFlickerState } = health;
 
   const debug = useDebugFeatures();
-  const { showGrid, setShowGrid, showHitbox } = debug;
+  const { showGrid, setShowGrid, showHitbox, setShowHitbox } = debug;
 
   // ========== STATE & REFS ==========
   const [characterPos, setCharacterPos] = useState({ x: 0, y: 0 });
@@ -106,13 +106,21 @@ export default function World() {
           backgroundColor: '#000000',
         }}
       >
-        {/* Grid Toggle Button */}
-        <button
-          onClick={() => setShowGrid(!showGrid)}
-          className="absolute top-4 right-4 z-10 px-3 py-2 rounded font-bold text-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-        >
-          {showGrid ? 'Hide Grid' : 'Show Grid'}
-        </button>
+        {/* Admin Debug Buttons */}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            className="px-3 py-2 rounded font-bold text-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+          >
+            {showGrid ? 'Hide Grid' : 'Show Grid'}
+          </button>
+          <button
+            onClick={() => setShowHitbox(!showHitbox)}
+            className="px-3 py-2 rounded font-bold text-sm bg-red-500 text-white hover:bg-red-600 transition-colors"
+          >
+            {showHitbox ? 'Hide Hitbox' : 'Show Hitbox'}
+          </button>
+        </div>
 
         <div className="relative" style={{ width: gridCols * cellSize, height: gridRows * cellSize }}>
           {/* Game Objects Layer */}
