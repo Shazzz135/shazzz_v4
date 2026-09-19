@@ -18,34 +18,28 @@ import Contacts from './pages/Contacts.tsx';
 
 function RouteTransition() {
   const location = useLocation();
-  const [displayLocation, setDisplayLocation] = useState(location);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
-    if (location.pathname !== displayLocation.pathname) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsTransitioning(true);
-      const timer = setTimeout(() => {
-        setDisplayLocation(location);
-        setIsTransitioning(false);
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [location, displayLocation]);
+    setIsTransitioning(true);
+    const timer = setTimeout(() => {
+      setIsTransitioning(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   return (
-    <div
-      key={displayLocation.pathname}
+    <div 
+      key={location.pathname}
       className={`route-transition ${isTransitioning ? 'fade-out' : ''}`}
     >
-      <Routes location={displayLocation}>
+      <Routes>
         <Route path="/" element={<Play />} />
         <Route path="/hub" element={<Hub />} />
         <Route path="/about" element={<About />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/experience" element={<Experience />} />
         <Route path="/contacts" element={<Contacts />} />
-        <Route path="/" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

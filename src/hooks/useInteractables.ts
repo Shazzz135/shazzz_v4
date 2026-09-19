@@ -92,9 +92,7 @@ export function useInteractables(gameObjects: GameObject[]) {
       if (portal.action?.type === 'navigate') {
         console.log(`PORTAL: Navigating to ${portal.action.path}`);
         setPortalTeleporting(true);
-        setTimeout(() => {
-          navigate(portal.action!.path);
-        }, 300);
+        navigate(portal.action.path);
         return;
       }
 

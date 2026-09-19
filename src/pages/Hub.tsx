@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { dungeonLevel } from '../data/hubData';
 import { processGameObjects } from '../utils/processGameObjects';
 import Character from '../components/Character';
@@ -74,9 +74,25 @@ export default function World() {
 
   // ========== EVENT HANDLERS ==========
 
-  const handlePortalEnterWithRef = (charX: number, charY: number) => {
+  const handlePortalEnterWithRef = useCallback((charX: number, charY: number) => {
     handlePortalEnterBase(charX, charY, cellSize, characterRef);
-  };
+  }, [cellSize, handlePortalEnterBase, characterRef]);
+
+  const handleHealthChange = useCallback((health: number) => {
+    setPlayerHealth(health);
+  }, [setPlayerHealth]);
+
+  const handleDeath = useCallback(() => {
+    // Player died - any World-level cleanup can go here
+  }, []);
+
+  const handlePositionChange = useCallback((x: number, y: number) => {
+    setCharacterPos({ x, y });
+  }, []);
+
+  const handlePunch = useCallback(() => {
+    // Punch detection can be implemented here if needed in future
+  }, []);
 
   return (
     <>
@@ -118,19 +134,13 @@ export default function World() {
               gridHeight={gridRows}
               scale={scale}
               spawnAddress={currentLevel.characterSpawn}
-              onHealthChange={(health) => setPlayerHealth(health)}
-              onDeath={() => {
-                // Player died - any World-level cleanup can go here
-              }}
+              onHealthChange={handleHealthChange}
+              onDeath={handleDeath}
               onButtonPress={handleSwitchActivation}
               openedDoors={openedDoors}
               showHitbox={showHitbox}
-              onPositionChange={(x, y) => {
-                setCharacterPos({ x, y });
-              }}
-              onPunch={() => {
-                // Punch detection can be implemented here if needed in future
-              }}
+              onPositionChange={handlePositionChange}
+              onPunch={handlePunch}
               onPortalEnter={handlePortalEnterWithRef}
             />
           )}

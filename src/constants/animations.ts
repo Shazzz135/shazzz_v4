@@ -46,10 +46,10 @@ export const ANIMATION_FRAMES: AnimationFrames = {
 
 export const ANIMATION_SPEED: Record<AnimationState, number> = {
   idle: 4,
-  running: 1,
+  running: 4,
   jumping: 1,
-  punching: 1,
-  prone: 1,
+  punching: 2,
+  prone: 4,
 };
 
 // Object animations
