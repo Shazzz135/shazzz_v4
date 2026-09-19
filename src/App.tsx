@@ -21,7 +21,9 @@ function RouteTransition() {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
-    setIsTransitioning(true);
+    queueMicrotask(() => {
+      setIsTransitioning(true);
+    });
     const timer = setTimeout(() => {
       setIsTransitioning(false);
     }, 250);
