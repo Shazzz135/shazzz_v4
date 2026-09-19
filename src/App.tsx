@@ -36,7 +36,7 @@ function RouteTransition() {
     >
       <Routes location={displayLocation}>
         <Route path="/" element={<Play />} />
-        <Route path="/world" element={<World />} />
+        <Route path="/hub" element={<World />} />
         <Route path="/" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

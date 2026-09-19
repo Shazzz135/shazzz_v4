@@ -30,16 +30,16 @@ export const sandboxLevel: LevelData = {
     createObject(
       BLOCK_OBJECTS.grassFull,
       { x: 4 * 32, y: 9 * 32 },
-      ['K5', 'K6', 'K7', 'K8', 'N1', 'N2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'P17', 'P18', 'P19', 'P20', 'P21', 'P22', 'P23', 'P24', 'P25', 'P26', 'P27', 'P28', 'P29', 'P30', 'N20', 'N21', 'N22', 'N23', 'N24', 'N25', 'N26', 'N27', 'N28', 'N29', 'N30', 'L25', 'L26', 'L27', 'L28', 'L29', 'L30']
+      ['J5', 'J6', 'J7', 'J8', 'M1', 'M2', 'O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10', 'O11', 'O12', 'O13', 'O14', 'O15', 'O16', 'O17', 'O18', 'O19', 'O20', 'O21', 'O22', 'O23', 'O24', 'O25', 'O26', 'O27', 'O28', 'O29', 'O30', 'M20', 'M21', 'M22', 'M23', 'M24', 'M25', 'M26', 'M27', 'M28', 'M29', 'M30', 'K25', 'K26', 'K27', 'K28', 'K29', 'K30']
     )
   ],
-  characterSpawn: 'N8',
+  characterSpawn: 'M8',
   background: dungeon,
   npcs: [
     {
       id: 'goblin-1',
       type: 'goblin',
-      address: 'L1',
+      address: 'K1',
     },
   ],
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dungeonLevel } from '../data/levelSelectData';
+import { dungeonLevel } from '../data/hubData';
 import { sandboxLevel } from '../data/sandboxData';
 import { processGameObjects } from '../utils/processGameObjects';
 import type { NPC } from '../types/NPC';
@@ -13,6 +13,7 @@ import BlockObject from '../objects/BlockObject';
 import AnimatedObject from '../objects/AnimatedObject';
 import InputObject from '../objects/InputObject';
 import OutputObject from '../objects/OutputObject';
+import TextObject from '../objects/TextObject';
 import { UI_OBJECTS } from '../objects/definitions';
 
 /**
@@ -593,6 +594,18 @@ export default function World() {
                         isActivated={openedDoors.has(obj.id)}
                         frameIndex={doorAnimationFrames[key] ?? 0}
                         isCompleted={completedDoors.has(obj.id)}
+                        showHitbox={showHitbox}
+                      />
+                    );
+                  case 'text':
+                    return (
+                      <TextObject
+                        key={key}
+                        object={obj}
+                        address={addr}
+                        cellSize={cellSize}
+                        playerX={characterX}
+                        playerY={characterY}
                         showHitbox={showHitbox}
                       />
                     );

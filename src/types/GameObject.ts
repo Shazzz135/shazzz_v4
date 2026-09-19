@@ -19,11 +19,23 @@ export interface ObjectAnimation {
   speed: number; // Animation speed (frames per cycle)
 }
 
+export interface TextConfig {
+  text: string; // Text content to display
+  bgColor: string; // Background color (e.g., 'rgba(0,10,50,1)')
+  color: [number, number, number]; // RGB color array (e.g., [230, 0, 190])
+  scale: number; // Font scale
+  charSpaces: number; // Space between characters
+  animate?: boolean; // Whether to animate text appearance
+  visibilityRange?: number; // Distance in pixels from player to show text (optional)
+  visibilityAddress?: string; // Grid address where text becomes visible (e.g., 'I3'). Takes precedence over visibilityRange
+}
+
 export interface GameObject {
   id: string; // Unique identifier for the object type
-  type: 'block' | 'animated' | 'input' | 'output' | 'ui' | 'portal'; // Object category
+  type: 'block' | 'animated' | 'input' | 'output' | 'ui' | 'portal' | 'text'; // Object category
   img?: string; // Path to sprite asset (optional if animation exists)
   animation?: ObjectAnimation; // Animation frames and speed (optional)
+  textConfig?: TextConfig; // For text objects: text rendering configuration
   hitbox: Hitbox; // Collision boundaries
   position: Position; // World position
   address: string[]; // Grid addresses where object is placed (A-P, 1-16) or with scale notation (e.g., "D12x2" for 2x2)

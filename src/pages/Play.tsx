@@ -24,7 +24,7 @@ export default function Play() {
 
                     <button
     type="button"
-    onClick={() => navigate("/world")}
+    onClick={() => navigate("/hub")}
     className="
         group relative mt-6 flex cursor-pointer
         items-center justify-center gap-4

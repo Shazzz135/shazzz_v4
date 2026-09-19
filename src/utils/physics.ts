@@ -124,8 +124,8 @@ export const checkIfOnGround = (
 
   // Check collision with all game objects
   for (const obj of gameObjects) {
-    // Skip collectible objects, input objects (buttons)
-    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip collectible objects, input objects (buttons), and text objects
+    if (obj.isCollectible || obj.type === 'input' || obj.type === 'text') continue;
     // Skip output objects (doors) only if they are opened
     if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
@@ -174,8 +174,8 @@ export const snapCharacterToSurface = (
   let shouldSnap = false;
 
   for (const obj of gameObjects) {
-    // Skip collectible objects, input objects (buttons)
-    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip collectible objects, input objects (buttons), and text objects
+    if (obj.isCollectible || obj.type === 'input' || obj.type === 'text') continue;
     // Skip output objects (doors) only if they are opened
     if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
@@ -233,9 +233,9 @@ export const checkSideCollision = (
 
   // Check collision with all game objects
   for (const obj of gameObjects) {
-    // Skip collectible objects, input objects (buttons)
+    // Skip collectible objects, input objects (buttons), and text objects
     // Skip output objects (doors) only if they are opened
-    if (obj.isCollectible || obj.type === 'input') continue;
+    if (obj.isCollectible || obj.type === 'input' || obj.type === 'text') continue;
     if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
     for (const addr of obj.address) {
@@ -265,8 +265,8 @@ export const checkHeadCollision = (
   const headCollisionTolerance = cellSize * 0.16; // ~5px at base 32px cellSize
 
   for (const obj of gameObjects) {
-    // Skip collectible objects, input objects (buttons)
-    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip collectible objects, input objects (buttons), and text objects
+    if (obj.isCollectible || obj.type === 'input' || obj.type === 'text') continue;
     // Skip output objects (doors) only if they are opened
     if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     
@@ -398,8 +398,8 @@ export const applyPhysics = (
   // Push character out of any objects they may have already penetrated
   const charHitbox = getCharacterHitbox(newChar, hitboxConfig);
   for (const obj of gameObjects) {
-    // Skip collectible objects, input objects (buttons)
-    if (obj.isCollectible || obj.type === 'input') continue;
+    // Skip collectible objects, input objects (buttons), and text objects
+    if (obj.isCollectible || obj.type === 'input' || obj.type === 'text') continue;
     // Skip output objects (doors) only if they are opened
     if (obj.type === 'output' && openedDoors.has(obj.id)) continue;
     

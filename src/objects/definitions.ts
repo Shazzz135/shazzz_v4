@@ -251,6 +251,12 @@ export const UI_OBJECTS = {
   },
 } as const;
 
+// ========== TEXT OBJECTS (Pixel Text) ==========
+export const TEXT_OBJECTS = {
+  // Template for creating text objects
+  // Use this as a base and override textConfig properties
+} as const;
+
 /**
  * Helper function to create a GameObject instance
  * Takes a template object and adds position/address information
@@ -274,4 +280,5 @@ export const ALL_GAME_OBJECTS = {
   ...INPUT_OBJECTS,
   ...OUTPUT_OBJECTS,
   ...UI_OBJECTS,
+  ...TEXT_OBJECTS,
 } as const;
