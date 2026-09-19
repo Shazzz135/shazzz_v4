@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import type { GameObject } from '../types/GameObject';
 import {
   ANIMATION_FRAMES,
@@ -22,35 +29,33 @@ import death2 from '../assets/character/death/death2.svg';
 import death3 from '../assets/character/death/death3.svg';
 import death4 from '../assets/character/death/death4.svg';
 
-/**
- * Character component - Manages player character rendering, animation, input handling, and physics
- * Controls: A/D (move), W (jump), Space (punch), S (prone - toggle)
- */
-
 interface CharacterProps {
   gameObjects: GameObject[];
   cellSize: number;
   gridWidth: number;
   gridHeight: number;
   scale: number;
-  spawnAddress?: string; // Character spawn position as grid address (e.g., "E8")
-  showHitbox?: boolean; // Debug: show character hitbox
+  spawnAddress?: string;
+  showHitbox?: boolean;
   onHealthChange?: (health: number) => void;
-  onDeath?: () => void; // Called when character dies (health = 0)
+  onDeath?: () => void;
   onSpikeHit?: (spikeAddress: string) => void;
-  onButtonPress?: (buttonObjectId: string) => void; // Called when character collides with input object
-  onCollectItem?: (itemAddress: string) => void; // Called when character collects a collectible item
-  openedDoors?: Set<string>; // Track which doors are currently opened
-  onPositionChange?: (x: number, y: number) => void; // Called when character position changes
-  onPunch?: (x: number, y: number, width: number, height: number) => void; // Called when character punches with hitbox info
-  onPortalEnter?: (x: number, y: number) => void; // Called when E key pressed on portal with character position
+  onButtonPress?: (buttonObjectId: string) => void;
+  onCollectItem?: (itemAddress: string) => void;
+  openedDoors?: Set<string>;
+  onPositionChange?: (x: number, y: number) => void;
+  onPunch?: (x: number, y: number, width: number, height: number) => void;
+  onPortalEnter?: (x: number, y: number) => void;
 }
 
-// Helper function to convert grid address to pixel coordinates
-const getPixelPositionFromAddress = (address: string, cellSize: number): { x: number; y: number } => {
-  const cleanAddr = address.replace(/[FLDR]$/, ''); // Remove any direction suffixes
+const getPixelPositionFromAddress = (
+  address: string,
+  cellSize: number
+): { x: number; y: number } => {
+  const cleanAddr = address.replace(/[FLDR]$/, '');
   const row = cleanAddr.charCodeAt(0) - 65;
-  const col = parseInt(cleanAddr.substring(1)) - 1;
+  const col = parseInt(cleanAddr.substring(1), 10) - 1;
+
   return {
     x: col * cellSize,
     y: row * cellSize,
@@ -61,850 +66,887 @@ const DEATH_FRAMES = [death1, death2, death3, death4];
 const DEATH_ANIMATION_SPEED = 12;
 
 const Character = forwardRef<
-  { takeDamage: (amount: number, source: string) => void },
+  {
+    takeDamage: (amount: number, source: string) => void;
+    teleportTo: (x: number, y: number) => void;
+  },
   CharacterProps
->(({
-  gameObjects,
-  cellSize,
-  gridWidth,
-  gridHeight,
-  scale,
-  spawnAddress = 'C5',
-  showHitbox = false,
-  onHealthChange,
-  onDeath,
-  onSpikeHit,
-  onButtonPress,
-  onCollectItem,
-  openedDoors = new Set(),
-  onPositionChange,
-  onPunch,
-  onPortalEnter,
-}, ref) => {
-  // ========== STATE ==========
-  const initialSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
-  const [character, setCharacter] = useState<CharacterState>({
-    x: initialSpawnPos.x,
-    y: initialSpawnPos.y,
-    velocityX: 0,
-    velocityY: 0,
-    width: CHARACTER_WIDTH * scale * 0.95,
-    height: CHARACTER_HEIGHT * scale * 0.95,
-    isJumping: false,
-    isFalling: false,
-    onGround: true,
-  });
-
-  const [animationState, setAnimationState] = useState<AnimationState>('idle');
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [facingRight, setFacingRight] = useState(true);
-  const [isPunching, setIsPunching] = useState(false);
-  const [isProne, setIsProne] = useState(false);
-  const [isProneLockedByObstacle, setIsProneLockedByObstacle] = useState(false);
-  const [health, setHealth] = useState(3); // 3=full (3 hearts), decreases by 0.5 or 1
-  const [isInvulnerable, setIsInvulnerable] = useState(false);
-  const [flickerState, setFlickerState] = useState(true); // Controls flicker visibility during immunity
-  const [isDead, setIsDead] = useState(false); // Character is dead (health = 0)
-  const [isDeathAnimationComplete, setIsDeathAnimationComplete] = useState(false); // Death animation finished
-
-  // ========== REFS ==========
-  const keysPressed = useRef<Record<string, boolean>>({});
-  const gameLoopRef = useRef<number | null>(null);
-  const animationTickRef = useRef(0);
-  const deathAnimationTickRef = useRef(0); // Track death animation frame timing
-  const lastGridPositionRef = useRef<Array<{ x: number; y: number }>>([]);
-  const isProneLockedRef = useRef(false); // Sync lock state for keyboard events
-  const invulnerabilityEndRef = useRef<number | null>(null); // Timestamp when invulnerability ends
-  const recentlyHitSpikesRef = useRef<Set<string>>(new Set()); // Track recently hit spike addresses
-  const lastSpikeHitTimeRef = useRef<Record<string, number>>({}); // Track last hit time for each spike (3 second cooldown)
-  const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set()); // Track buttons character is currently overlapping (requires re-entry to press again)
-  const punchCalledRef = useRef(false); // Track if onPunch has been called for current punch animation
-
-  // Expose takeDamage and teleportTo methods to parent component
-  useImperativeHandle(ref, () => ({
-    takeDamage: (amount: number) => {
-      if (isDead) return; // Don't take damage if already dead
-      if (isInvulnerable) return; // Ignore damage if in grace period
-      
-      // Deal damage
-      setHealth((prev) => {
-        const newHealth = Math.max(prev - amount, 0);
-        return newHealth;
-      });
-
-      // Start invulnerability grace period (3 seconds)
-      setIsInvulnerable(true);
-      invulnerabilityEndRef.current = Date.now() + 3000;
-      setFlickerState(true);
+>(
+  (
+    {
+      gameObjects,
+      cellSize,
+      gridWidth,
+      gridHeight,
+      scale,
+      spawnAddress = 'C5',
+      showHitbox = false,
+      onHealthChange,
+      onDeath,
+      onSpikeHit,
+      onButtonPress,
+      onCollectItem,
+      openedDoors = new Set(),
+      onPositionChange,
+      onPunch,
+      onPortalEnter,
     },
-    teleportTo: (x: number, y: number) => {
-      // Teleport character to new position
-      setCharacter((prev) => ({
-        ...prev,
-        x,
-        y,
-        velocityX: 0,
-        velocityY: 0,
-      }));
-    },
-  }), [isInvulnerable, isDead]);
+    ref
+  ) => {
+    const initialSpawnPos = getPixelPositionFromAddress(
+      spawnAddress,
+      cellSize
+    );
 
-  // Helper function to get all grid cells occupied by character's hitbox
-  const getOccupiedGridCells = useCallback((char: CharacterState, currentAnimState: AnimationState): Array<{ x: number; y: number }> => {
-    const config = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
-    const hitboxLeft = char.x + config.offsetX;
-    const hitboxRight = hitboxLeft + config.width;
-    const hitboxTop = char.y + config.offsetY;
-    const hitboxBottom = hitboxTop + config.height;
-
-    const cells: Array<{ x: number; y: number }> = [];
-    const minGridX = Math.floor(hitboxLeft / cellSize);
-    const maxGridX = Math.floor((hitboxRight - 1) / cellSize);
-    const minGridY = Math.floor(hitboxTop / cellSize);
-    const maxGridY = Math.floor((hitboxBottom - 1) / cellSize);
-
-    for (let x = minGridX; x <= maxGridX; x++) {
-      for (let y = minGridY; y <= maxGridY; y++) {
-        if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-          cells.push({ x, y });
-        }
-      }
-    }
-    return cells;
-  }, [cellSize, gridWidth, gridHeight]);
-
-  // Helper function to check for overhead obstacles - fully scale-aware
-  const checkForOverheadObstacle = useCallback((char: CharacterState, currentAnimState: AnimationState): boolean => {
-    const standingConfig = HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
-    
-    // Use SCALED hitbox dimensions to match actual character size
-    const scaledWidth = standingConfig.width * scale * 0.95;
-    const scaledHeight = standingConfig.height * scale * 0.95;
-    const scaledOffsetX = standingConfig.offsetX * scale * 0.95;
-    const scaledOffsetY = standingConfig.offsetY * scale * 0.95;
-    
-    const testHitbox = {
-      x: char.x + scaledOffsetX,
-      y: char.y + scaledOffsetY,
-      width: scaledWidth,
-      height: scaledHeight,
-      right: char.x + scaledOffsetX + scaledWidth,
-      bottom: char.y + scaledOffsetY + scaledHeight,
-    };
-    
-    const headTop = testHitbox.y;
-    // Scale the clearance check to match current scale - allows ~50% of cell height clearance
-    // This ensures at any screen size, the character can fit under objects that are 1 cell above
-    const clearanceAmount = cellSize * 0.50;
-    const checkZoneTop = headTop - cellSize;
-    const checkZoneBottom = headTop + clearanceAmount;
-    
-    for (const obj of gameObjects) {
-      // Skip collectible items (they shouldn't block movement)
-      if (obj.isCollectible) continue;
-
-      for (const addr of obj.address) {
-        const cleanAddr = getCleanAddress(addr);
-        const rowLetter = cleanAddr.charCodeAt(0);
-        
-        if (rowLetter >= 80) continue; // Skip P layer and below
-        
-        const gridY = (rowLetter - 65) * cellSize;
-        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
-        
-        // Scale object hitbox to match current cellSize (hitboxes defined at 32px base)
-        const HITBOX_BASE_SIZE = 32;
-        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
-        const scaledWidth = obj.hitbox.width * scaleFactor;
-        const scaledHeight = obj.hitbox.height * scaleFactor;
-        const scaledOffsetX = obj.hitbox.x * scaleFactor;
-        const scaledOffsetY = obj.hitbox.y * scaleFactor;
-        
-        // Use the scaled object hitbox
-        const objHitbox = {
-          x: gridX + scaledOffsetX,
-          y: gridY + scaledOffsetY,
-          right: gridX + scaledOffsetX + scaledWidth,
-          bottom: gridY + scaledOffsetY + scaledHeight,
-        };
-        
-        const objectIsAboveHead = objHitbox.y < checkZoneBottom && objHitbox.bottom > checkZoneTop;
-        const xOverlap = testHitbox.x < objHitbox.right && testHitbox.right > objHitbox.x;
-        
-        if (objectIsAboveHead && xOverlap) {
-          return true; // Found obstacle
-        }
-      }
-    }
-    return false; // No obstacle
-  }, [gameObjects, cellSize, scale]);
-
-  // Helper function to check for spike collision and deal damage
-  const checkSpikeDamage = useCallback((char: CharacterState) => {
-    if (isInvulnerable) return; // Skip if already invulnerable
-
-    // Find spike objects and check for collision (address-based detection)
-    for (const obj of gameObjects) {
-      if (obj.id !== 'spikes') continue;
-
-      for (const addr of obj.address) {
-        const cleanAddr = getCleanAddress(addr);
-        const rowLetter = cleanAddr.charCodeAt(0);
-        const gridY = (rowLetter - 65) * cellSize;
-        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
-
-        // Check if character center is within spike grid cell
-        const charCenterX = char.x + char.width / 2;
-        const charCenterY = char.y + char.height / 2;
-        
-        const charOverlapsSpike =
-          charCenterX >= gridX &&
-          charCenterX <= gridX + cellSize &&
-          charCenterY >= gridY &&
-          charCenterY <= gridY + cellSize;
-
-        if (charOverlapsSpike) {
-          // Check if spike was hit in the last 3 seconds
-          const now = Date.now();
-          const lastHitTime = lastSpikeHitTimeRef.current[addr] ?? 0;
-          const timeSinceLastHit = now - lastHitTime;
-          const CAN_HIT_AGAIN = timeSinceLastHit >= 3000; // 3 second cooldown
-
-          if (CAN_HIT_AGAIN) {
-            // Deal damage (use damageAmount from object definition, default to 1)
-            const damageAmount = obj.damageAmount ?? 1;
-            setHealth((prev) => {
-              const newHealth = Math.max(prev - damageAmount, 0);
-              return newHealth;
-            });
-
-            // Record hit time for this spike
-            lastSpikeHitTimeRef.current[addr] = now;
-            onSpikeHit?.(addr); // Notify parent of spike hit
-          }
-
-          // Mark spike as recently hit for flicker effect (visual feedback)
-          recentlyHitSpikesRef.current.add(addr);
-          setTimeout(() => {
-            recentlyHitSpikesRef.current.delete(addr);
-          }, 300); // Flicker for 300ms
-
-          // Start invulnerability
-          setIsInvulnerable(true);
-          invulnerabilityEndRef.current = Date.now() + 3000; // 3 second immunity
-          setFlickerState(true);
-        }
-      }
-    }
-  }, [isInvulnerable, gameObjects, cellSize, onSpikeHit]);
-
-  // Helper function to check for button collision and trigger button press
-  // Only activates when character is standing ON TOP of the button, not from sides
-  // Buttons at stage 4 (frame 3) can be pressed again to deactivate - character can walk through them
-  // Button press is based purely on character position, not animation state (prevents retriggering on animation changes)
-  const checkButtonPress = useCallback((char: CharacterState) => {
-    // Use character's base position with a simple collision box (not animation-dependent)
-    // This ensures animation changes don't cause the overlap detection to flip
-    const charBaseHitbox = {
-      x: char.x,
-      y: char.y,
-      right: char.x + char.width,
-      bottom: char.y + char.height,
-    };
-
-    // Track buttons currently overlapping this frame
-    const currentlyOverlappingThisFrame = new Set<string>();
-
-    // Find input objects (buttons) and check for collision
-    for (const obj of gameObjects) {
-      if (obj.type !== 'input') continue;
-
-      let isOverlappingAnyInstance = false;
-
-      for (const addr of obj.address) {
-        const cleanAddr = getCleanAddress(addr);
-        const rowLetter = cleanAddr.charCodeAt(0);
-        const gridY = (rowLetter - 65) * cellSize;
-        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
-
-        // Scale button hitbox to match current cellSize
-        const HITBOX_BASE_SIZE = 32;
-        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
-        const scaledWidth = obj.hitbox.width * scaleFactor;
-        const scaledHeight = obj.hitbox.height * scaleFactor;
-        const scaledOffsetX = obj.hitbox.x * scaleFactor;
-        const scaledOffsetY = obj.hitbox.y * scaleFactor;
-
-        // Get button hitbox
-        const buttonHitbox = {
-          x: gridX + scaledOffsetX,
-          y: gridY + scaledOffsetY,
-          right: gridX + scaledOffsetX + scaledWidth,
-          bottom: gridY + scaledOffsetY + scaledHeight,
-        };
-
-        // Check collision: character hitbox must overlap with button hitbox (full AABB collision)
-        // This is the ONLY trigger condition - character must touch the actual blue hitbox rectangle
-        const colliding = 
-          charBaseHitbox.x < buttonHitbox.right &&
-          charBaseHitbox.right > buttonHitbox.x &&
-          charBaseHitbox.y < buttonHitbox.bottom &&
-          charBaseHitbox.bottom > buttonHitbox.y;
-
-        if (colliding) {
-          isOverlappingAnyInstance = true;
-        }
-      }
-
-      // If overlapping any instance of this button, track it
-      if (isOverlappingAnyInstance) {
-        currentlyOverlappingThisFrame.add(obj.id);
-
-        // Only trigger button press if we weren't already overlapping this button
-        if (!currentlyOverlappingButtonsRef.current.has(obj.id)) {
-          onButtonPress?.(obj.id);
-        }
-      }
-    }
-
-    // Update the currently overlapping buttons for next frame
-    currentlyOverlappingButtonsRef.current = currentlyOverlappingThisFrame;
-  }, [gameObjects, cellSize, onButtonPress]);
-
-  // Check for collectible item collisions
-  const checkCollectibleItems = useCallback((char: CharacterState) => {
-    // Determine current animation state for accurate hitbox
-    let physicsAnimState: AnimationState = 'idle';
-    if (isPunching) {
-      physicsAnimState = 'punching';
-    } else if (isProne) {
-      physicsAnimState = 'prone';
-    } else if (char.isJumping || (char.velocityY !== 0 && !char.onGround)) {
-      physicsAnimState = 'jumping';
-    } else if (char.velocityX !== 0) {
-      physicsAnimState = 'running';
-    }
-
-    // Get hitbox config for current animation state
-    const baseHitboxConfig = HITBOX_CONFIG[physicsAnimState];
-    const scaledHitboxConfig = {
-      width: baseHitboxConfig.width * scale * 0.95,
-      height: baseHitboxConfig.height * scale * 0.95,
-      offsetX: baseHitboxConfig.offsetX * scale * 0.95,
-      offsetY: baseHitboxConfig.offsetY * scale * 0.95,
-    };
-
-    // Character hitbox with proper offsets
-    const charHitbox = {
-      x: char.x + scaledHitboxConfig.offsetX,
-      y: char.y + scaledHitboxConfig.offsetY,
-      right: char.x + scaledHitboxConfig.offsetX + scaledHitboxConfig.width,
-      bottom: char.y + scaledHitboxConfig.offsetY + scaledHitboxConfig.height,
-    };
-
-    for (const obj of gameObjects) {
-      if (!obj.isCollectible) continue;
-
-      for (const addr of obj.address) {
-        const cleanAddr = getCleanAddress(addr);
-        const rowLetter = cleanAddr.charCodeAt(0);
-        const gridY = (rowLetter - 65) * cellSize;
-        const gridX = (parseInt(cleanAddr.substring(1)) - 1) * cellSize;
-
-        const HITBOX_BASE_SIZE = 32;
-        const scaleFactor = cellSize / HITBOX_BASE_SIZE;
-        const scaledWidth = obj.hitbox.width * scaleFactor;
-        const scaledHeight = obj.hitbox.height * scaleFactor;
-        const scaledOffsetX = obj.hitbox.x * scaleFactor;
-        const scaledOffsetY = obj.hitbox.y * scaleFactor;
-
-        const itemHitbox = {
-          x: gridX + scaledOffsetX,
-          y: gridY + scaledOffsetY,
-          right: gridX + scaledOffsetX + scaledWidth,
-          bottom: gridY + scaledOffsetY + scaledHeight,
-        };
-
-        // Check collision
-        const colliding =
-          charHitbox.x < itemHitbox.right &&
-          charHitbox.right > itemHitbox.x &&
-          charHitbox.y < itemHitbox.bottom &&
-          charHitbox.bottom > itemHitbox.y;
-
-        if (colliding) {
-          onCollectItem?.(addr);
-        }
-      }
-    }
-  }, [gameObjects, cellSize, onCollectItem, isPunching, isProne, scale]);
-
-  // ========== INPUT HANDLING ==========
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Disable all input when character is dead
-    if (isDead) return;
-    
-    const key = e.key.toLowerCase();
-    keysPressed.current[key] = true;
-
-    if (key === 'w' && !isProne) {
-      setCharacter((prev) => jump(prev, scale));
-    }
-    if (key === ' ' && character.onGround && character.velocityX === 0 && !keysPressed.current['a'] && !keysPressed.current['d'] && !isProne) {
-      console.log('CHARACTER: Punch!');
-      setIsPunching(true);
-      e.preventDefault();
-    }
-    if (key === 's') {
-      console.log('CHARACTER: Entering prone');
-      setIsProne(true);
-    }
-    if (key === 'e') {
-      // E key pressed - trigger portal enter
-      onPortalEnter?.(character.x, character.y);
-      e.preventDefault();
-    }
-  }, [isProne, scale, character.onGround, character.velocityX, character.x, character.y, isDead, onPortalEnter]);
-
-  const handleKeyUp = (e: KeyboardEvent) => {
-    const key = e.key.toLowerCase();
-    keysPressed.current[key] = false;
-
-    if (key === 's') {
-      // Use ref for current lock state (avoids stale closure issue)
-      if (!isProneLockedRef.current) {
-        console.log('CHARACTER: Prone unlocked - standing up');
-        setIsProne(false);
-      } else {
-        console.log('CHARACTER: Prone locked - cannot stand up');
-      }
-    }
-  };
-
-  // ========== EFFECTS ==========
-  // Sync locked state to ref for keyboard event handlers
-  useEffect(() => {
-    isProneLockedRef.current = isProneLockedByObstacle;
-  }, [isProneLockedByObstacle]);
-
-  // Manage invulnerability timer and flicker effect
-  useEffect(() => {
-    if (!isInvulnerable || isDead) return; // Don't flicker if dead
-
-    const flickerInterval = setInterval(() => {
-      setFlickerState((prev) => !prev);
-    }, 200); // Toggle flicker every 200ms
-
-    const invulnerabilityInterval = setInterval(() => {
-      if (invulnerabilityEndRef.current && Date.now() >= invulnerabilityEndRef.current) {
-        setIsInvulnerable(false);
-        setFlickerState(true);
-        invulnerabilityEndRef.current = null;
-      }
-    }, 50); // Check every 50ms
-
-    return () => {
-      clearInterval(flickerInterval);
-      clearInterval(invulnerabilityInterval);
-    };
-  }, [isInvulnerable, isDead]);
-
-  // Update parent when health changes
-  useEffect(() => {
-    onHealthChange?.(health);
-    
-    // Detect death (health = 0)
-    if (health <= 0 && !isDead) {
-      setIsDead(true);
-      setFrameIndex(0); // Reset to first death frame
-      onDeath?.();
-    }
-  }, [health, onHealthChange, isDead, onDeath]);
-
-  // Check overhead obstacles when character moves to a new grid cell (only when prone)
-  useEffect(() => {
-    if (isProne) {
-      // Get all grid cells currently occupied by character
-      const currentOccupiedCells = getOccupiedGridCells(character, 'idle');
-      
-      // Check if the set of occupied cells has changed
-      const cellsChanged = lastGridPositionRef.current.length !== currentOccupiedCells.length ||
-        lastGridPositionRef.current.some((prevCell, idx) => 
-          !currentOccupiedCells[idx] || 
-          prevCell.x !== currentOccupiedCells[idx].x || 
-          prevCell.y !== currentOccupiedCells[idx].y
-        );
-      
-      if (cellsChanged) {
-        lastGridPositionRef.current = currentOccupiedCells;
-        
-        // Check for overhead obstacle using standing hitbox (idle)
-        const hasObstacle = checkForOverheadObstacle(character, 'idle');
-        const isHoldingProneKey = keysPressed.current['s'];
-        
-        // Update lock state based on current state and what we found
-        if (isProneLockedByObstacle && !hasObstacle) {
-          // Was locked, but now clear - unlock
-          setIsProneLockedByObstacle(false);
-          // Auto-stand only if NOT holding 's'
-          if (!isHoldingProneKey) {
-            setIsProne(false);
-          }
-          // Otherwise, keep prone state if holding 's'
-        } else if (!isProneLockedByObstacle && hasObstacle) {
-          // Was unlocked, but now blocked - lock
-          setIsProneLockedByObstacle(true);
-        }
-      }
-    } else {
-      // Update grid position ref even when not prone for next time
-      lastGridPositionRef.current = getOccupiedGridCells(character, 'idle');
-    }
-  }, [character, isProne, isProneLockedByObstacle, checkForOverheadObstacle, getOccupiedGridCells]);
-
-  // Update character size when scale changes
-  useEffect(() => {
-    setCharacter((prev) => ({
-      ...prev,
+    const [character, setCharacter] = useState<CharacterState>({
+      x: initialSpawnPos.x,
+      y: initialSpawnPos.y,
+      velocityX: 0,
+      velocityY: 0,
       width: CHARACTER_WIDTH * scale * 0.95,
       height: CHARACTER_HEIGHT * scale * 0.95,
-    }));
-  }, [scale]);
+      isJumping: false,
+      isFalling: false,
+      onGround: true,
+    });
 
-  // Recalculate character position when cellSize changes to maintain relative grid position
-  useEffect(() => {
-    const newSpawnPos = getPixelPositionFromAddress(spawnAddress, cellSize);
-    setCharacter((prev) => ({
-      ...prev,
-      x: newSpawnPos.x,
-      y: newSpawnPos.y,
-    }));
-  }, [cellSize, spawnAddress]);
+    const [animationState, setAnimationState] =
+      useState<AnimationState>('idle');
+    const [frameIndex, setFrameIndex] = useState(0);
+    const [facingRight, setFacingRight] = useState(true);
+    const [isPunching, setIsPunching] = useState(false);
+    const [isProne, setIsProne] = useState(false);
+    const [isProneLockedByObstacle, setIsProneLockedByObstacle] =
+      useState(false);
+    const [health, setHealth] = useState(3);
+    const [isInvulnerable, setIsInvulnerable] = useState(false);
+    const [flickerState, setFlickerState] = useState(true);
+    const [isDead, setIsDead] = useState(false);
+    const [isDeathAnimationComplete, setIsDeathAnimationComplete] =
+      useState(false);
 
-  // Game loop with physics and movement
-  useEffect(() => {
-    const gameLoop = () => {
-      setCharacter((prev) => {
-        let newChar = { ...prev };
+    const keysPressed = useRef<Record<string, boolean>>({});
+    const gameLoopRef = useRef<number | null>(null);
+    const animationTickRef = useRef(0);
+    const deathAnimationTickRef = useRef(0);
+    const lastGridPositionRef = useRef<Array<{ x: number; y: number }>>([]);
+    const isProneLockedRef = useRef(false);
+    const invulnerabilityEndRef = useRef<number | null>(null);
+    const recentlyHitSpikesRef = useRef<Set<string>>(new Set());
+    const lastSpikeHitTimeRef = useRef<Record<string, number>>({});
+    const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set());
+    const punchCalledRef = useRef(false);
 
-        // Handle movement input (allowed in prone now)
-        const movingLeft = keysPressed.current['a'];
-        const movingRight = keysPressed.current['d'];
+    const characterRef = useRef(character);
+    const facingRightRef = useRef(facingRight);
+    const isPunchingRef = useRef(isPunching);
+    const isProneRef = useRef(isProne);
+    const isDeadRef = useRef(isDead);
+    const isInvulnerableRef = useRef(isInvulnerable);
 
-        // If both A and D are pressed, stop movement
-        if (movingLeft && movingRight) {
-          newChar = stopMoving(newChar);
-        } else if (movingLeft) {
-          // Half movement speed while prone
-          if (isProne) {
-            newChar = moveLeft(newChar, scale * 0.5);
-          } else {
-            newChar = moveLeft(newChar, scale);
-          }
-          if (facingRight) setFacingRight(false);
-        } else if (movingRight) {
-          // Half movement speed while prone
-          if (isProne) {
-            newChar = moveRight(newChar, scale * 0.5);
-          } else {
-            newChar = moveRight(newChar, scale);
-          }
-          if (!facingRight) setFacingRight(true);
-        } else {
-          newChar = stopMoving(newChar);
-        }
+    characterRef.current = character;
+    facingRightRef.current = facingRight;
+    isPunchingRef.current = isPunching;
+    isProneRef.current = isProne;
+    isDeadRef.current = isDead;
+    isInvulnerableRef.current = isInvulnerable;
 
-        // Determine animation state for physics
-        let physicsAnimState: AnimationState = 'idle';
-        if (isPunching) {
-          physicsAnimState = 'punching';
-        } else if (isProne) {
-          physicsAnimState = 'prone';
-        } else if (prev.isJumping || (prev.velocityY !== 0 && !prev.onGround)) {
-          physicsAnimState = 'jumping';
-        } else if (prev.velocityX !== 0) {
-          physicsAnimState = 'running';
-        }
-        
-        // Scale hitbox config for current animation state
-        const baseHitboxConfig = HITBOX_CONFIG[physicsAnimState];
-        const scaledHitboxConfig = {
-          width: baseHitboxConfig.width * scale * 0.95,
-          height: baseHitboxConfig.height * scale * 0.95,
-          offsetX: baseHitboxConfig.offsetX * scale * 0.95,
-          offsetY: baseHitboxConfig.offsetY * scale * 0.95,
-        };
-        
-        newChar = applyPhysics(
-          newChar,
-          gameObjects,
-          cellSize,
-          gridWidth,
-          gridHeight,
-          scaledHitboxConfig,
-          scale,
-          openedDoors
-        );
+    useImperativeHandle(
+      ref,
+      () => ({
+        takeDamage: (amount: number) => {
+          if (isDeadRef.current || isInvulnerableRef.current) return;
 
-        // Check if landed
-        if (newChar.onGround && prev.isJumping) {
-          newChar.isJumping = false;
-        }
+          setHealth((prev) => Math.max(prev - amount, 0));
+          setIsInvulnerable(true);
+          invulnerabilityEndRef.current = Date.now() + 3000;
+          setFlickerState(true);
+        },
 
-        // Check for spike damage
-        checkSpikeDamage(newChar);
+        teleportTo: (x: number, y: number) => {
+          setCharacter((prev) => ({
+            ...prev,
+            x,
+            y,
+            velocityX: 0,
+            velocityY: 0,
+          }));
+        },
+      }),
+      []
+    );
 
-        return newChar;
-      });
+    const getOccupiedGridCells = useCallback(
+      (
+        char: CharacterState,
+        currentAnimState: AnimationState
+      ): Array<{ x: number; y: number }> => {
+        const config =
+          HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
 
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
-    };
+        const hitboxLeft = char.x + config.offsetX;
+        const hitboxRight = hitboxLeft + config.width;
+        const hitboxTop = char.y + config.offsetY;
+        const hitboxBottom = hitboxTop + config.height;
 
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+        const cells: Array<{ x: number; y: number }> = [];
+        const minGridX = Math.floor(hitboxLeft / cellSize);
+        const maxGridX = Math.floor((hitboxRight - 1) / cellSize);
+        const minGridY = Math.floor(hitboxTop / cellSize);
+        const maxGridY = Math.floor((hitboxBottom - 1) / cellSize);
 
-    return () => {
-      if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-      }
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [gameObjects, cellSize, gridWidth, gridHeight, facingRight, isProne, scale, isPunching, checkSpikeDamage, handleKeyDown, openedDoors, onPortalEnter]);
-
-  // Check button presses after character position updates
-  useEffect(() => {
-    checkButtonPress(character);
-  }, [character, checkButtonPress]);
-
-  // Check for collectible item pickups after character position updates
-  useEffect(() => {
-    checkCollectibleItems(character);
-  }, [character, checkCollectibleItems]);
-
-  // Call position change callback when character moves
-  useEffect(() => {
-    if (onPositionChange) {
-      onPositionChange(character.x, character.y);
-    }
-  }, [character.x, character.y, onPositionChange]);
-
-  // Call punch callback when punching
-  useEffect(() => {
-    if (!isPunching) {
-      // Reset punch ref when punch ends (allows next punch to trigger)
-      punchCalledRef.current = false;
-    } else if (isPunching && onPunch && !punchCalledRef.current) {
-      // Calculate punch hitbox extensions
-      const punchExtendRange = character.width * 0.05;
-      const punchHeight = character.height * 0.3;
-      const punchY = character.y + character.height * 0.35;
-      let punchX = character.x;
-      let punchWidth = punchExtendRange;
-      
-      if (facingRight) {
-        // Right-facing punch extends from right side of character forward
-        punchX = character.x + character.width;
-        punchWidth = punchExtendRange;
-      } else {
-        // Left-facing punch extends from left side of character backward  
-        punchX = character.x - punchExtendRange;
-        punchWidth = punchExtendRange;
-      }
-      
-      onPunch(punchX, punchY, punchWidth, punchHeight);
-      punchCalledRef.current = true; // Mark that punch has been called
-    }
-  }, [isPunching, character, facingRight, onPunch]);
-
-  // Animation state machine and frame updates
-  useEffect(() => {
-    // If dead, handle death animation separately
-    if (isDead) {
-      if (!isDeathAnimationComplete) {
-        // Play death animation
-        deathAnimationTickRef.current++;
-        if (deathAnimationTickRef.current >= DEATH_ANIMATION_SPEED) {
-          deathAnimationTickRef.current = 0;
-          setFrameIndex((prev) => {
-            const nextFrame = prev + 1;
-            if (nextFrame >= DEATH_FRAMES.length) {
-              // Death animation complete, freeze on last frame
-              setIsDeathAnimationComplete(true);
-              return DEATH_FRAMES.length - 1;
+        for (let x = minGridX; x <= maxGridX; x++) {
+          for (let y = minGridY; y <= maxGridY; y++) {
+            if (
+              x >= 0 &&
+              x < gridWidth &&
+              y >= 0 &&
+              y < gridHeight
+            ) {
+              cells.push({ x, y });
             }
-            return nextFrame;
-          });
+          }
         }
+
+        return cells;
+      },
+      [cellSize, gridWidth, gridHeight]
+    );
+
+    const checkForOverheadObstacle = useCallback(
+      (
+        char: CharacterState,
+        currentAnimState: AnimationState
+      ): boolean => {
+        const config =
+          HITBOX_CONFIG[currentAnimState as keyof typeof HITBOX_CONFIG];
+
+        const scaledWidth = config.width * scale * 0.95;
+        const scaledHeight = config.height * scale * 0.95;
+        const scaledOffsetX = config.offsetX * scale * 0.95;
+        const scaledOffsetY = config.offsetY * scale * 0.95;
+
+        const testHitbox = {
+          x: char.x + scaledOffsetX,
+          y: char.y + scaledOffsetY,
+          width: scaledWidth,
+          height: scaledHeight,
+          right: char.x + scaledOffsetX + scaledWidth,
+          bottom: char.y + scaledOffsetY + scaledHeight,
+        };
+
+        const checkZoneTop = testHitbox.y - cellSize;
+        const checkZoneBottom = testHitbox.y + cellSize * 0.5;
+
+        for (const obj of gameObjects) {
+          if (obj.isCollectible) continue;
+
+          for (const addr of obj.address) {
+            const cleanAddr = getCleanAddress(addr);
+            const rowLetter = cleanAddr.charCodeAt(0);
+
+            if (rowLetter >= 80) continue;
+
+            const gridY = (rowLetter - 65) * cellSize;
+            const gridX =
+              (parseInt(cleanAddr.substring(1), 10) - 1) * cellSize;
+
+            const scaleFactor = cellSize / 32;
+
+            const objHitbox = {
+              x: gridX + obj.hitbox.x * scaleFactor,
+              y: gridY + obj.hitbox.y * scaleFactor,
+              right:
+                gridX +
+                obj.hitbox.x * scaleFactor +
+                obj.hitbox.width * scaleFactor,
+              bottom:
+                gridY +
+                obj.hitbox.y * scaleFactor +
+                obj.hitbox.height * scaleFactor,
+            };
+
+            const objectIsAboveHead =
+              objHitbox.y < checkZoneBottom &&
+              objHitbox.bottom > checkZoneTop;
+
+            const xOverlap =
+              testHitbox.x < objHitbox.right &&
+              testHitbox.right > objHitbox.x;
+
+            if (objectIsAboveHead && xOverlap) return true;
+          }
+        }
+
+        return false;
+      },
+      [gameObjects, cellSize, scale]
+    );
+
+    const checkSpikeDamage = useCallback(
+      (char: CharacterState) => {
+        if (isInvulnerableRef.current || isDeadRef.current) return;
+
+        for (const obj of gameObjects) {
+          if (obj.id !== 'spikes') continue;
+
+          for (const addr of obj.address) {
+            const cleanAddr = getCleanAddress(addr);
+            const rowLetter = cleanAddr.charCodeAt(0);
+            const gridY = (rowLetter - 65) * cellSize;
+            const gridX =
+              (parseInt(cleanAddr.substring(1), 10) - 1) * cellSize;
+
+            const centerX = char.x + char.width / 2;
+            const centerY = char.y + char.height / 2;
+
+            const colliding =
+              centerX >= gridX &&
+              centerX <= gridX + cellSize &&
+              centerY >= gridY &&
+              centerY <= gridY + cellSize;
+
+            if (!colliding) continue;
+
+            const now = Date.now();
+            const lastHit =
+              lastSpikeHitTimeRef.current[addr] ?? 0;
+
+            if (now - lastHit >= 3000) {
+              const damageAmount = obj.damageAmount ?? 1;
+
+              setHealth((prev) =>
+                Math.max(prev - damageAmount, 0)
+              );
+
+              lastSpikeHitTimeRef.current[addr] = now;
+              onSpikeHit?.(addr);
+
+              setIsInvulnerable(true);
+              invulnerabilityEndRef.current = now + 3000;
+              setFlickerState(true);
+            }
+
+            recentlyHitSpikesRef.current.add(addr);
+
+            window.setTimeout(() => {
+              recentlyHitSpikesRef.current.delete(addr);
+            }, 300);
+          }
+        }
+      },
+      [gameObjects, cellSize, onSpikeHit]
+    );
+
+    const checkButtonPress = useCallback(
+      (char: CharacterState) => {
+        const charHitbox = {
+          x: char.x,
+          y: char.y,
+          right: char.x + char.width,
+          bottom: char.y + char.height,
+        };
+
+        const overlapping = new Set<string>();
+
+        for (const obj of gameObjects) {
+          if (obj.type !== 'input') continue;
+
+          let collidingButton = false;
+
+          for (const addr of obj.address) {
+            const cleanAddr = getCleanAddress(addr);
+            const rowLetter = cleanAddr.charCodeAt(0);
+            const gridY = (rowLetter - 65) * cellSize;
+            const gridX =
+              (parseInt(cleanAddr.substring(1), 10) - 1) *
+              cellSize;
+
+            const factor = cellSize / 32;
+
+            const buttonHitbox = {
+              x: gridX + obj.hitbox.x * factor,
+              y: gridY + obj.hitbox.y * factor,
+              right:
+                gridX +
+                obj.hitbox.x * factor +
+                obj.hitbox.width * factor,
+              bottom:
+                gridY +
+                obj.hitbox.y * factor +
+                obj.hitbox.height * factor,
+            };
+
+            if (
+              charHitbox.x < buttonHitbox.right &&
+              charHitbox.right > buttonHitbox.x &&
+              charHitbox.y < buttonHitbox.bottom &&
+              charHitbox.bottom > buttonHitbox.y
+            ) {
+              collidingButton = true;
+            }
+          }
+
+          if (collidingButton) {
+            overlapping.add(obj.id);
+
+            if (!currentlyOverlappingButtonsRef.current.has(obj.id)) {
+              onButtonPress?.(obj.id);
+            }
+          }
+        }
+
+        currentlyOverlappingButtonsRef.current = overlapping;
+      },
+      [gameObjects, cellSize, onButtonPress]
+    );
+
+    const checkCollectibleItems = useCallback(
+      (char: CharacterState) => {
+        let state: AnimationState = 'idle';
+
+        if (isPunchingRef.current) state = 'punching';
+        else if (isProneRef.current) state = 'prone';
+        else if (char.isJumping || (!char.onGround && char.velocityY !== 0))
+          state = 'jumping';
+        else if (char.velocityX !== 0) state = 'running';
+
+        const base = HITBOX_CONFIG[state];
+        const factor = scale * 0.95;
+
+        const hitbox = {
+          x: char.x + base.offsetX * factor,
+          y: char.y + base.offsetY * factor,
+          right: char.x + base.offsetX * factor + base.width * factor,
+          bottom:
+            char.y + base.offsetY * factor + base.height * factor,
+        };
+
+        for (const obj of gameObjects) {
+          if (!obj.isCollectible) continue;
+
+          for (const addr of obj.address) {
+            const cleanAddr = getCleanAddress(addr);
+            const rowLetter = cleanAddr.charCodeAt(0);
+            const gridY = (rowLetter - 65) * cellSize;
+            const gridX =
+              (parseInt(cleanAddr.substring(1), 10) - 1) *
+              cellSize;
+
+            const objectFactor = cellSize / 32;
+
+            const itemHitbox = {
+              x: gridX + obj.hitbox.x * objectFactor,
+              y: gridY + obj.hitbox.y * objectFactor,
+              right:
+                gridX +
+                obj.hitbox.x * objectFactor +
+                obj.hitbox.width * objectFactor,
+              bottom:
+                gridY +
+                obj.hitbox.y * objectFactor +
+                obj.hitbox.height * objectFactor,
+            };
+
+            if (
+              hitbox.x < itemHitbox.right &&
+              hitbox.right > itemHitbox.x &&
+              hitbox.y < itemHitbox.bottom &&
+              hitbox.bottom > itemHitbox.y
+            ) {
+              onCollectItem?.(addr);
+            }
+          }
+        }
+      },
+      [gameObjects, cellSize, onCollectItem, scale]
+    );
+
+    const handleKeyDown = useCallback(
+      (e: KeyboardEvent) => {
+        if (isDeadRef.current) return;
+
+        const key = e.key.toLowerCase();
+        keysPressed.current[key] = true;
+
+        const current = characterRef.current;
+
+        if (key === 'w' && !isProneRef.current) {
+          setCharacter((prev) => jump(prev, scale));
+        }
+
+        if (
+          key === ' ' &&
+          current.onGround &&
+          current.velocityX === 0 &&
+          !keysPressed.current.a &&
+          !keysPressed.current.d &&
+          !isProneRef.current
+        ) {
+          setIsPunching(true);
+          e.preventDefault();
+        }
+
+        if (key === 's') {
+          setIsProne(true);
+        }
+
+        if (key === 'e') {
+          onPortalEnter?.(current.x, current.y);
+          e.preventDefault();
+        }
+      },
+      [scale, onPortalEnter]
+    );
+
+    const handleKeyUp = useCallback((e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      keysPressed.current[key] = false;
+
+      if (key === 's' && !isProneLockedRef.current) {
+        setIsProne(false);
       }
-      return; // Skip normal animation handling
-    }
+    }, []);
 
-    // Determine animation state based on character action
-    let newAnimState: AnimationState = 'idle';
+    useEffect(() => {
+      isProneLockedRef.current = isProneLockedByObstacle;
+    }, [isProneLockedByObstacle]);
 
-    if (isPunching) {
-      newAnimState = 'punching';
-    } else if (isProne) {
-      newAnimState = 'prone';
-    } else if (character.isJumping || (character.velocityY !== 0 && !character.onGround)) {
-      newAnimState = 'jumping';
-    } else if (character.velocityX !== 0) {
-      newAnimState = 'running';
-    } else {
-      newAnimState = 'idle';
-      if (animationState !== 'idle') {
-        console.log('CHARACTER: Standing idle');
-      }
-    }
+    useEffect(() => {
+      if (!isInvulnerable || isDead) return;
 
-    // Reset frame when animation state changes
-    if (newAnimState !== animationState) {
-      setAnimationState(newAnimState);
-      // For jumping, immediately show airborne frame (frame 1)
-      if (newAnimState === 'jumping') {
-        setFrameIndex(1);
-      } else {
+      const flickerInterval = window.setInterval(() => {
+        setFlickerState((prev) => !prev);
+      }, 200);
+
+      const immunityInterval = window.setInterval(() => {
+        if (
+          invulnerabilityEndRef.current &&
+          Date.now() >= invulnerabilityEndRef.current
+        ) {
+          setIsInvulnerable(false);
+          setFlickerState(true);
+          invulnerabilityEndRef.current = null;
+        }
+      }, 50);
+
+      return () => {
+        clearInterval(flickerInterval);
+        clearInterval(immunityInterval);
+      };
+    }, [isInvulnerable, isDead]);
+
+    useEffect(() => {
+      onHealthChange?.(health);
+
+      if (health <= 0 && !isDeadRef.current) {
+        setIsDead(true);
         setFrameIndex(0);
+        onDeath?.();
       }
-      animationTickRef.current = 0;
-    }
+    }, [health, onHealthChange, onDeath]);
 
-    // Update animation frames at specified speed
-    const animationInterval = setInterval(() => {
-      // Freeze prone animation when not moving
-      if (newAnimState === 'prone' && character.velocityX === 0) {
-        // Stay on first frame while prone and stationary
-        setFrameIndex(0);
-        animationTickRef.current = 0;
+    useEffect(() => {
+      if (!isProne) {
+        lastGridPositionRef.current = getOccupiedGridCells(
+          character,
+          'idle'
+        );
         return;
       }
 
-      animationTickRef.current++;
-      
-      const speed = ANIMATION_SPEED[newAnimState] || 10;
+      const cells = getOccupiedGridCells(character, 'idle');
 
-      if (animationTickRef.current >= speed) {
-        animationTickRef.current = 0;
-        setFrameIndex((prev) => {
-          const frameList = ANIMATION_FRAMES[newAnimState as AnimationState];
-          const maxFrames = frameList?.length || 1;
+      const changed =
+        cells.length !== lastGridPositionRef.current.length ||
+        cells.some(
+          (cell, index) =>
+            cell.x !== lastGridPositionRef.current[index]?.x ||
+            cell.y !== lastGridPositionRef.current[index]?.y
+        );
 
-          // Jumping animation: hold frame 1 until landing
-          if (newAnimState === 'jumping') {
-            if (prev === 0) {
-              return 1; // Move to frame 1 on takeoff
+      if (!changed) return;
+
+      lastGridPositionRef.current = cells;
+
+      const obstacle = checkForOverheadObstacle(character, 'idle');
+      const holdingProne = keysPressed.current.s;
+
+      if (isProneLockedByObstacle && !obstacle) {
+        setIsProneLockedByObstacle(false);
+
+        if (!holdingProne) {
+          setIsProne(false);
+        }
+      } else if (!isProneLockedByObstacle && obstacle) {
+        setIsProneLockedByObstacle(true);
+      }
+    }, [
+      character,
+      isProne,
+      isProneLockedByObstacle,
+      checkForOverheadObstacle,
+      getOccupiedGridCells,
+    ]);
+
+    useEffect(() => {
+      setCharacter((prev) => ({
+        ...prev,
+        width: CHARACTER_WIDTH * scale * 0.95,
+        height: CHARACTER_HEIGHT * scale * 0.95,
+      }));
+    }, [scale]);
+
+    useEffect(() => {
+      const position = getPixelPositionFromAddress(
+        spawnAddress,
+        cellSize
+      );
+
+      setCharacter((prev) => ({
+        ...prev,
+        x: position.x,
+        y: position.y,
+      }));
+    }, [cellSize, spawnAddress]);
+
+    useEffect(() => {
+      const gameLoop = () => {
+        const current = characterRef.current;
+
+        if (!isDeadRef.current) {
+          let next = { ...current };
+
+          const left = keysPressed.current.a;
+          const right = keysPressed.current.d;
+
+          if (left && right) {
+            next = stopMoving(next);
+          } else if (left) {
+            next = isProneRef.current
+              ? moveLeft(next, scale * 0.5)
+              : moveLeft(next, scale);
+
+            if (facingRightRef.current) {
+              setFacingRight(false);
             }
-            // Stay on frame 1 until grounded, then reset to 0
-            if (character.onGround) {
-              return 0;
+          } else if (right) {
+            next = isProneRef.current
+              ? moveRight(next, scale * 0.5)
+              : moveRight(next, scale);
+
+            if (!facingRightRef.current) {
+              setFacingRight(true);
             }
-            return 1; // Hold frame 1 while in air
+          } else {
+            next = stopMoving(next);
           }
 
-          // Normal frame progression
-          const nextFrame = (prev + 1) % maxFrames;
+          let physicsState: AnimationState = 'idle';
 
-          // Auto-exit punch animation after one complete cycle
-          if (newAnimState === 'punching' && nextFrame === 0) {
+          if (isPunchingRef.current) physicsState = 'punching';
+          else if (isProneRef.current) physicsState = 'prone';
+          else if (
+            current.isJumping ||
+            (current.velocityY !== 0 && !current.onGround)
+          ) {
+            physicsState = 'jumping';
+          } else if (current.velocityX !== 0) {
+            physicsState = 'running';
+          }
+
+          const base = HITBOX_CONFIG[physicsState];
+          const factor = scale * 0.95;
+
+          next = applyPhysics(
+            next,
+            gameObjects,
+            cellSize,
+            gridWidth,
+            gridHeight,
+            {
+              width: base.width * factor,
+              height: base.height * factor,
+              offsetX: base.offsetX * factor,
+              offsetY: base.offsetY * factor,
+            },
+            scale,
+            openedDoors
+          );
+
+          if (next.onGround && current.isJumping) {
+            next.isJumping = false;
+          }
+
+          characterRef.current = next;
+          setCharacter(next);
+          checkSpikeDamage(next);
+        }
+
+        gameLoopRef.current = requestAnimationFrame(gameLoop);
+      };
+
+      gameLoopRef.current = requestAnimationFrame(gameLoop);
+
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+
+      return () => {
+        if (gameLoopRef.current !== null) {
+          cancelAnimationFrame(gameLoopRef.current);
+        }
+
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }, [
+      gameObjects,
+      cellSize,
+      gridWidth,
+      gridHeight,
+      scale,
+      openedDoors,
+      checkSpikeDamage,
+      handleKeyDown,
+      handleKeyUp,
+    ]);
+
+    useEffect(() => {
+      checkButtonPress(character);
+      checkCollectibleItems(character);
+    }, [character, checkButtonPress, checkCollectibleItems]);
+
+    useEffect(() => {
+      onPositionChange?.(character.x, character.y);
+    }, [character.x, character.y, onPositionChange]);
+
+    useEffect(() => {
+      if (!isPunching) {
+        punchCalledRef.current = false;
+        return;
+      }
+
+      if (!onPunch || punchCalledRef.current) return;
+
+      const punchRange = character.width * 0.45;
+      const punchHeight = character.height * 0.7;
+      const punchY = character.y + character.height * 0.15;
+
+      const punchX = facingRight
+        ? character.x + character.width * 0.8
+        : character.x - punchRange + character.width * 0.2;
+
+      onPunch(
+        punchX,
+        punchY,
+        punchRange,
+        punchHeight
+      );
+
+      punchCalledRef.current = true;
+    }, [isPunching, character, facingRight, onPunch]);
+
+    useEffect(() => {
+      if (isDead) {
+        if (isDeathAnimationComplete) return;
+
+        deathAnimationTickRef.current++;
+
+        if (deathAnimationTickRef.current >= DEATH_ANIMATION_SPEED) {
+          deathAnimationTickRef.current = 0;
+
+          setFrameIndex((prev) => {
+            const next = prev + 1;
+
+            if (next >= DEATH_FRAMES.length) {
+              setIsDeathAnimationComplete(true);
+              return DEATH_FRAMES.length - 1;
+            }
+
+            return next;
+          });
+        }
+
+        return;
+      }
+
+      let newAnimation: AnimationState = 'idle';
+
+      if (isPunching) newAnimation = 'punching';
+      else if (isProne) newAnimation = 'prone';
+      else if (
+        character.isJumping ||
+        (character.velocityY !== 0 && !character.onGround)
+      ) {
+        newAnimation = 'jumping';
+      } else if (character.velocityX !== 0) {
+        newAnimation = 'running';
+      }
+
+      if (newAnimation !== animationState) {
+        setAnimationState(newAnimation);
+        setFrameIndex(newAnimation === 'jumping' ? 1 : 0);
+        animationTickRef.current = 0;
+      }
+
+      const interval = window.setInterval(() => {
+        if (
+          newAnimation === 'prone' &&
+          character.velocityX === 0
+        ) {
+          setFrameIndex(0);
+          animationTickRef.current = 0;
+          return;
+        }
+
+        animationTickRef.current++;
+
+        const speed = ANIMATION_SPEED[newAnimation] || 10;
+
+        if (animationTickRef.current < speed) return;
+
+        animationTickRef.current = 0;
+
+        setFrameIndex((prev) => {
+          const framesForAnimation =
+            ANIMATION_FRAMES[newAnimation] || [];
+
+          const maxFrames = framesForAnimation.length || 1;
+
+          if (newAnimation === 'jumping') {
+            if (character.onGround) return 0;
+            return 1;
+          }
+
+          const next = (prev + 1) % maxFrames;
+
+          if (newAnimation === 'punching' && next === 0) {
             setIsPunching(false);
           }
 
-          return nextFrame;
+          return next;
         });
-      }
-    }, 16);
+      }, 16);
 
-    return () => clearInterval(animationInterval);
-  }, [character, animationState, isPunching, isProne, isDead, isDeathAnimationComplete]);
+      return () => clearInterval(interval);
+    }, [
+      character,
+      animationState,
+      isPunching,
+      isProne,
+      isDead,
+      isDeathAnimationComplete,
+    ]);
 
-  // ========== RENDERING ==========
-  const frames = isDead ? DEATH_FRAMES : ANIMATION_FRAMES[animationState as AnimationState];
-  const currentFrame = frames[Math.min(frameIndex, frames.length - 1)] || frames[0];
+    const frames = isDead
+      ? DEATH_FRAMES
+      : ANIMATION_FRAMES[animationState];
 
-  // Calculate scaling and positioning for prone state
-  const isProneState = animationState === 'prone';
-  const proneScale = isProneState ? 1.25 : 1;
-  const proneYOffset = isProneState ? character.height * 0 : 0; // Raise prone image by 25% of height
+    const currentFrame =
+      frames[Math.min(frameIndex, frames.length - 1)] || frames[0];
 
-  return (
-    <>
-      <img
-        src={currentFrame}
-        alt="character"
-        className="absolute"
-        style={{
-          width: `${character.width * proneScale}px`,
-          height: `${character.height * proneScale}px`,
-          objectFit: 'contain',
-          transform: `translate(${character.x - (character.width * (proneScale - 1)) / 2}px, ${character.y + proneYOffset - (character.height * (proneScale - 1)) / 2}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
-          pointerEvents: 'none',
-          opacity: isInvulnerable && !flickerState ? 0 : 1, // Flicker during immunity
-          transition: 'opacity 0.05s', // Smooth opacity changes
-          willChange: 'transform', // Hardware acceleration hint
-        }}
-      />
-      {showHitbox && (
-        <svg
+    const isProneState = animationState === 'prone';
+    const proneScale = isProneState ? 1.25 : 1;
+
+    return (
+      <>
+        <img
+          src={currentFrame}
+          alt="character"
           className="absolute"
           style={{
-            left: '0px',
-            top: '0px',
-            width: '100%',
-            height: '100%',
+            width: `${character.width * proneScale}px`,
+            height: `${character.height * proneScale}px`,
+            objectFit: 'contain',
+            transform: `translate(${
+              character.x -
+              (character.width * (proneScale - 1)) / 2
+            }px, ${
+              character.y -
+              (character.height * (proneScale - 1)) / 2
+            }px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
             pointerEvents: 'none',
+            opacity:
+              isInvulnerable && !flickerState ? 0 : 1,
+            transition: 'opacity 0.05s',
+            willChange: 'transform',
           }}
-        >
-          <rect
-            x={character.x + HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].offsetX * scale * 0.95}
-            y={character.y + HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].offsetY * scale * 0.95}
-            width={HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].width * scale * 0.95}
-            height={HITBOX_CONFIG[animationState as keyof typeof HITBOX_CONFIG].height * scale * 0.95}
-            fill="none"
-            stroke="#0000FF"
-            strokeWidth="2"
-            opacity="0.7"
-          />
-        </svg>
-      )}
-      {showHitbox && isPunching && (
-        <svg
-          className="absolute"
-          style={{
-            left: '0px',
-            top: '0px',
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-          }}
-        >
-          {facingRight ? (
+        />
+
+        {showHitbox && (
+          <svg
+            className="absolute"
+            style={{
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+            }}
+          >
             <rect
-              x={character.x + character.width}
-              y={character.y + character.height * 0.35}
-              width={character.width * 0.05}
-              height={character.height * 0.3}
+              x={
+                character.x +
+                HITBOX_CONFIG[animationState].offsetX *
+                  scale *
+                  0.95
+              }
+              y={
+                character.y +
+                HITBOX_CONFIG[animationState].offsetY *
+                  scale *
+                  0.95
+              }
+              width={
+                HITBOX_CONFIG[animationState].width *
+                scale *
+                0.95
+              }
+              height={
+                HITBOX_CONFIG[animationState].height *
+                scale *
+                0.95
+              }
+              fill="none"
+              stroke="#0000FF"
+              strokeWidth="2"
+              opacity="0.7"
+            />
+          </svg>
+        )}
+
+        {showHitbox && isPunching && (
+          <svg
+            className="absolute"
+            style={{
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+            }}
+          >
+            <rect
+              x={
+                facingRight
+                  ? character.x + character.width * 0.8
+                  : character.x -
+                    character.width * 0.45 +
+                    character.width * 0.2
+              }
+              y={character.y + character.height * 0.15}
+              width={character.width * 0.45}
+              height={character.height * 0.7}
               fill="rgba(255, 0, 0, 0.3)"
               stroke="#FF0000"
               strokeWidth="2"
             />
-          ) : (
-            <rect
-              x={character.x - character.width * 0.05}
-              y={character.y + character.height * 0.35}
-              width={character.width * 0.05}
-              height={character.height * 0.3}
-              fill="rgba(255, 0, 0, 0.3)"
-              stroke="#FF0000"
-              strokeWidth="2"
-            />
-          )}
-        </svg>
-      )}
-    </>
-  );
-});
+          </svg>
+        )}
+      </>
+    );
+  }
+);
 
 Character.displayName = 'Character';
 

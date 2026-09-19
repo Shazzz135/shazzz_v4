@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle, useCallback } from 'react';
 import walking1 from '../assets/goblin/walking/walking1.svg';
 import walking2 from '../assets/goblin/walking/walking2.svg';
 import walking3 from '../assets/goblin/walking/walking3.svg';
@@ -135,33 +135,44 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   const ATTACK_GRACE_PERIOD_MS = 1000; // 1 second between attacks on the same character
 
   // Expose position and turnTowardPlayer for parent punch detection
-  useImperativeHandle(
-    ref,
-    () => ({
-      getPosition: () => ({
-        x: goblin.x,
-        y: goblin.y,
-        width: goblin.width,
-        height: goblin.height,
-      }),
-      turnTowardPlayer: (playerX: number) => {
-        // Determine direction: if player is to the right, face right; otherwise face left
-        setGoblin((prevGoblin) => {
-          const goblinCenterX = prevGoblin.x + prevGoblin.width / 2;
-          const shouldFaceRight = playerX > goblinCenterX;
-          setFacingRight(shouldFaceRight);
-          // Update velocity to move in the direction the goblin is now facing
-          return {
-            ...prevGoblin,
-            velocityX: shouldFaceRight ? 1 : -1,
-          };
-        });
-        // Force chase mode so goblin actively walks toward player regardless of previous state
-        isChasingRef.current = true;
-      },
-    }),
-    [goblin]
-  );
+ const goblinStateRef = useRef(goblin);
+goblinStateRef.current = goblin;
+
+const goblinHandle = useMemo<GoblinHandle>(
+  () => ({
+    getPosition: () => {
+      const current = goblinStateRef.current;
+
+      return {
+        x: current.x,
+        y: current.y,
+        width: current.width,
+        height: current.height,
+      };
+    },
+
+    turnTowardPlayer: (playerX: number) => {
+      const current = goblinStateRef.current;
+      const goblinCenterX = current.x + current.width / 2;
+      const shouldFaceRight = playerX > goblinCenterX;
+
+      isChasingRef.current = true;
+      setFacingRight(shouldFaceRight);
+
+      setGoblin((prevGoblin) => ({
+        ...prevGoblin,
+        velocityX: shouldFaceRight ? 1 : -1,
+      }));
+    },
+  }),
+  []
+);
+
+useImperativeHandle(ref, () => goblinHandle, [goblinHandle]);
+
+useEffect(() => {
+  onMount?.(id, goblinHandle);
+}, [id, onMount, goblinHandle]);
 
   // Sync character position refs
   useEffect(() => {
@@ -199,44 +210,81 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
 
   // Check attack collision and damage character
   useEffect(() => {
-    if (!isAttacking || !characterX || characterY === undefined) return;
-    if (isPlayerDead) return; // Don't attack if player is dead
+  if (!isAttacking || characterX === undefined || characterY === undefined) {
+    return;
+  }
 
-    // Only deal damage during the actual attack frame (when attack1 is displayed)
-    const isOnAttackFrame = frameIndex % ATTACK_FRAMES.length === 1;
-    if (!isOnAttackFrame) return;
+  if (isPlayerDead || isDefeated) {
+    return;
+  }
 
-    const now = Date.now();
-    
-    // Check grace period - don't attack again if recently hit
-    if (now - lastAttackTimeRef.current < ATTACK_GRACE_PERIOD_MS) return;
+  // Only register the actual attack frame.
+  const isOnAttackFrame = frameIndex % ATTACK_FRAMES.length === 1;
 
-    // Calculate attack hitbox (0.1 width, 0.3 height, positioned at 75% when facing right, 25% when facing left)
-    const attackWidth = goblin.width * 0.1;
-    const attackHeight = goblin.height * 0.3;
-    const attackY = goblin.y + goblin.height * 0.35;
-    const attackX = goblin.x + (facingRight ? goblin.width * 0.75 : goblin.width * 0.25) - attackWidth / 2;
+  if (!isOnAttackFrame) {
+    return;
+  }
 
-    // Character hitbox
-    const charHitbox = {
-      x: characterX,
-      y: characterY,
-      right: characterX + characterWidth,
-      bottom: characterY + characterHeight,
-    };
+  const now = Date.now();
 
-    // AABB collision check
-    const attackHits =
-      attackX < charHitbox.right &&
-      attackX + attackWidth > charHitbox.x &&
-      attackY < charHitbox.bottom &&
-      attackY + attackHeight > charHitbox.y;
+  if (now - lastAttackTimeRef.current < ATTACK_GRACE_PERIOD_MS) {
+    return;
+  }
 
-    if (attackHits && !isDefeated) {
-      lastAttackTimeRef.current = now;
-      onAttackHit?.();
-    }
-  }, [isAttacking, characterX, characterY, facingRight, goblin, characterWidth, characterHeight, onAttackHit, isDefeated, frameIndex, isPlayerDead]);
+  /*
+   * Attack hitbox only.
+   *
+   * This does NOT change the goblin's:
+   * - width
+   * - height
+   * - scale
+   * - animation frames
+   * - frame rendering
+   *
+   * It only determines how close the player must be
+   * for the attack to register.
+   */
+  const attackWidth = goblin.width * 0.45;
+  const attackHeight = goblin.height * 0.7;
+  const attackY = goblin.y + goblin.height * 0.15;
+
+  const attackX = facingRight
+    ? goblin.x + goblin.width * 0.65
+    : goblin.x - goblin.width * 0.1;
+
+  const characterHitbox = {
+    x: characterX,
+    y: characterY,
+    right: characterX + characterWidth,
+    bottom: characterY + characterHeight,
+  };
+
+  const attackHits =
+    attackX < characterHitbox.right &&
+    attackX + attackWidth > characterHitbox.x &&
+    attackY < characterHitbox.bottom &&
+    attackY + attackHeight > characterHitbox.y;
+
+  if (attackHits) {
+    lastAttackTimeRef.current = now;
+    onAttackHit?.();
+  }
+}, [
+  isAttacking,
+  frameIndex,
+  facingRight,
+  goblin.x,
+  goblin.y,
+  goblin.width,
+  goblin.height,
+  characterX,
+  characterY,
+  characterWidth,
+  characterHeight,
+  isPlayerDead,
+  isDefeated,
+  onAttackHit,
+]);
 
   // Grace period flicker animation
   useEffect(() => {
@@ -589,19 +637,23 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
         />
       )}
       {showHitbox && !isDefeated && isAttacking && (
-        <div
-          style={{
-            position: 'absolute',
-            left: `${goblin.x + (facingRight ? goblin.width * 0.75 : goblin.width * 0.25) - goblin.width * 0.1 / 2}px`,
-            top: `${goblin.y + goblin.height * 0.35}px`,
-            width: `${goblin.width * 0.1}px`,
-            height: `${goblin.height * 0.3}px`,
-            border: '2px solid red',
-            pointerEvents: 'none',
-            backgroundColor: 'rgba(255, 0, 0, 0.2)',
-          }}
-        />
-      )}
+  <div
+    style={{
+      position: 'absolute',
+      left: `${
+        facingRight
+          ? goblin.x + goblin.width * 0.65
+          : goblin.x - goblin.width * 0.1
+      }px`,
+      top: `${goblin.y + goblin.height * 0.15}px`,
+      width: `${goblin.width * 0.45}px`,
+      height: `${goblin.height * 0.7}px`,
+      border: '2px solid red',
+      pointerEvents: 'none',
+      backgroundColor: 'rgba(255, 0, 0, 0.2)',
+    }}
+  />
+)}
     </>
   );
 });
