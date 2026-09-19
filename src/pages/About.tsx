@@ -142,6 +142,11 @@ export default function About() {
     setCollectedItems((prev) => new Set([...prev, itemAddress]));
   }, []);
 
+  // Callback for Goblin to register itself on mount
+  const handleGoblinMount = useCallback((goblinId: string, goblinRef: { takeDamage: (amount: number) => void }) => {
+    goblinRefsRef.current[goblinId] = goblinRef;
+  }, []);
+
   return (
     <>
       <RotateDeviceScreen />

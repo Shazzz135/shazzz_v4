@@ -32,6 +32,7 @@ interface GoblinProps {
   hitCount?: number; // Current hit count (0-3)
   isInGracePeriod?: boolean; // Whether goblin is currently invulnerable
   onAttackHit?: () => void; // Called when goblin's attack hits the character
+  onMount?: (id: string, ref: GoblinHandle) => void; // Called when goblin mounts to register ref
 }
 
 interface GoblinState {
@@ -82,6 +83,7 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
     hitCount = 0,
     isInGracePeriod = false,
     onAttackHit,
+    onMount,
   },
   ref
 ) {
