@@ -42,24 +42,28 @@ export const dungeonLevel: LevelData = {
       ['O1F', 'O30', 'J3F', 'J10', 'J21F', 'J28', 'L14F', 'L17']
     ),
     {
-      ...ANIMATED_OBJECTS.portal,
+      ...ANIMATED_OBJECTS.portalRed,
       position: { x: 8 * 32, y: 2 * 32 }, // H3
       address: ['H4x2'],
+      action: {type: 'navigate', path: '/about'}
     } as GameObject,
     {
-      ...ANIMATED_OBJECTS.portal,
+      ...ANIMATED_OBJECTS.portalRed,
       position: { x: 8 * 32, y: 26 * 32 }, // H27
       address: ['H26x2'],
+      action: {type: 'navigate', path: '/projects'}
     } as GameObject,
     {
-      ...ANIMATED_OBJECTS.portal,
+      ...ANIMATED_OBJECTS.portalRed,
       position: { x: 8 * 32, y: 26 * 32 }, // M27
       address: ['M8x2'],
+      action: {type: 'navigate', path: '/experience'}
     } as GameObject,
     {
-      ...ANIMATED_OBJECTS.portal,
+      ...ANIMATED_OBJECTS.portalRed,
       position: { x: 8 * 32, y: 26 * 32 }, // M27
       address: ['M22x2'],
+      action: {type: 'navigate', path: '/contacts'}
     } as GameObject,
     {
       id: 'help',

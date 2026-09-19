@@ -10,7 +10,11 @@ import {
 
 import { APP } from './data/data.ts';
 import Play from './pages/Play.tsx';
-import World from './pages/World.tsx';
+import Hub from './pages/Hub.tsx';
+import About from './pages/About.tsx';
+import Projects from './pages/Projects.tsx';
+import Experience from './pages/Experience.tsx';
+import Contacts from './pages/Contacts.tsx';
 
 function RouteTransition() {
   const location = useLocation();
@@ -36,7 +40,11 @@ function RouteTransition() {
     >
       <Routes location={displayLocation}>
         <Route path="/" element={<Play />} />
-        <Route path="/hub" element={<World />} />
+        <Route path="/hub" element={<Hub />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/experience" element={<Experience />} />
+        <Route path="/contacts" element={<Contacts />} />
         <Route path="/" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

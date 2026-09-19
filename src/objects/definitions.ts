@@ -90,12 +90,12 @@ export const ANIMATED_OBJECTS = {
     position: { x: 0, y: 0 },
     address: [],
   },
-  portal: {
+  portalRed: {
     id: 'portal',
     type: 'portal' as const,
     animation: {
       frames: [portalRed1, portalRed2] as const,
-      speed: 4,
+      speed: 31, // 2 FPS smooth animation (500ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
@@ -107,7 +107,7 @@ export const ANIMATED_OBJECTS = {
     type: 'portal' as const,
     animation: {
       frames: [portalBlue1, portalBlue2] as const,
-      speed: 4,
+      speed: 31, // 2 FPS smooth animation (500ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
