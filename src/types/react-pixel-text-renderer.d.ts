@@ -1,6 +1,4 @@
 declare module 'react-pixel-text-renderer' {
-  import { ReactNode } from 'react';
-
   interface TextRendererProps {
     bgColor?: string;
     color?: [number, number, number] | string;

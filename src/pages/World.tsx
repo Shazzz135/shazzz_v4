@@ -48,7 +48,6 @@ export default function World() {
   const [completedDoors, setCompletedDoors] = useState<Set<string>>(new Set()); // Track doors that finished animating and should disappear
   const [doorAnimationDirection, setDoorAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for doors
   const [buttonAnimationDirection, setButtonAnimationDirection] = useState<Record<string, 'forward' | 'backward'>>({}); // Track animation direction for buttons
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showHitbox, setShowHitbox] = useState(false); // Debug: show hitboxes
   void setShowHitbox; // Kept for debugging
   const [showGrid, setShowGrid] = useState(false); // Toggle grid visibility
