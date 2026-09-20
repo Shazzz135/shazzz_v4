@@ -133,7 +133,7 @@ export default function About() {
   const handleGoblinAttack = useCallback(() => {
     // Goblin deals 0.5 hearts of damage to player
     if (characterRef.current) {
-      characterRef.current.takeDamage(0.5);
+      characterRef.current.takeDamage(1.5);
     }
   }, []);
 

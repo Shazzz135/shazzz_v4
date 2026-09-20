@@ -11,7 +11,7 @@ import heartFull from '../assets/ui/heart/heart_full.svg';
 import heartEmpty from '../assets/ui/heart/heart_empty.svg';
 import type { GameObject } from '../types/GameObject';
 import { getObjectHitbox, checkHitboxCollision } from '../utils/physics';
-import { getCleanAddress } from '../utils/addressParser';
+import { getCleanAddress, isFlipped } from '../utils/addressParser';
 
 interface GoblinProps {
   id: string;
@@ -52,8 +52,8 @@ export interface GoblinHandle {
 
 const GOBLIN_WIDTH = 48;
 const GOBLIN_HEIGHT = 48;
-const WALK_SPEED = 0.48; // Base walking speed (pixels per frame)
-const CHASE_SPEED = 2.16; // Speed when chasing character
+const WALK_SPEED = 1; // Base walking speed (pixels per frame)
+const CHASE_SPEED = 3; // Speed when chasing character
 const GRAVITY = 0.6;
 const MAX_VELOCITY_Y = 8;
 const ANIMATION_SPEED = 6; // Frames before switching animation frame
@@ -90,6 +90,8 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   const width = GOBLIN_WIDTH * scale;
   const height = GOBLIN_HEIGHT * scale;
 
+  const startsFacingRight = !isFlipped(address);
+
   const gridPixelWidth = gridWidth * cellSize;
   const gridPixelHeight = gridHeight * cellSize;
 
@@ -112,16 +114,16 @@ const GoblinComponent = forwardRef<GoblinHandle, GoblinProps>(function Goblin(
   const initialPos = calculateInitialSpawnPos();
 
   const [goblin, setGoblin] = useState<GoblinState>({
-    x: initialPos.x,
-    y: initialPos.y,
-    velocityX: WALK_SPEED,
-    velocityY: 0,
-    width: width,
-    height: height,
-    onGround: true,
-  });
+  x: initialPos.x,
+  y: initialPos.y,
+  velocityX: startsFacingRight ? WALK_SPEED : -WALK_SPEED,
+  velocityY: 0,
+  width: width,
+  height: height,
+  onGround: true,
+});
 
-  const [facingRight, setFacingRight] = useState(true);
+const [facingRight, setFacingRight] = useState(startsFacingRight);
   const [frameIndex, setFrameIndex] = useState(0);
   const [graceFlicker, setGraceFlicker] = useState(true); // Flicker during grace period
   const [isAttacking, setIsAttacking] = useState(false); // Whether goblin is attacking
@@ -198,15 +200,21 @@ useEffect(() => {
     }));
   }, [scale]);
 
-  // Recalculate spawn position when cellSize or address changes
-  useEffect(() => {
-    const newPos = calculateInitialSpawnPos();
-    setGoblin((prevGoblin) => ({
-      ...prevGoblin,
-      x: newPos.x,
-      y: newPos.y,
-    }));
-  }, [cellSize, address, calculateInitialSpawnPos]);
+  // Recalculate spawn position and facing direction
+// when cellSize or address changes
+useEffect(() => {
+  const newPos = calculateInitialSpawnPos();
+  const newFacingRight = isFlipped(address);
+
+  setFacingRight(newFacingRight);
+
+  setGoblin((prevGoblin) => ({
+    ...prevGoblin,
+    x: newPos.x,
+    y: newPos.y,
+    velocityX: newFacingRight ? WALK_SPEED : -WALK_SPEED,
+  }));
+}, [cellSize, address, calculateInitialSpawnPos]);
 
   // Check attack collision and damage character
   useEffect(() => {
@@ -573,7 +581,21 @@ useEffect(() => {
           pointerEvents: 'none',
           transformOrigin: 'center center',
           opacity: isInGracePeriod && !graceFlicker ? 0.3 : 1,
-          transform: `translate(${goblin.x - (isAttacking && !isDefeated && frameIndex % ATTACK_FRAMES.length === 1 ? goblin.width * 0.05 : 0)}px, ${goblin.y - (isAttacking && !isDefeated && frameIndex % ATTACK_FRAMES.length === 1 ? goblin.height * 0.125 : 0)}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
+          transform: `translate(${
+  goblin.x -
+  (isAttacking &&
+  !isDefeated &&
+  frameIndex % ATTACK_FRAMES.length === 1
+    ? goblin.width * 0.05
+    : 0)
+}px, ${
+  goblin.y -
+  (isAttacking &&
+  !isDefeated &&
+  frameIndex % ATTACK_FRAMES.length === 1
+    ? goblin.height * 0.125
+    : 0)
+}px) ${facingRight ? 'scaleX(1)' : 'scaleX(-1)'}`,
           willChange: 'transform', // Hardware acceleration
           transition: 'opacity 0.06s',
         }}

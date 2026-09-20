@@ -136,7 +136,7 @@ export const INPUT_OBJECTS = {
     type: 'input' as const,
     animation: {
       frames: [blueSwitch1, blueSwitch2, blueSwitch3, blueSwitch4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 8, y: 26, width: 16, height: 6 },
     position: { x: 0, y: 0 },
@@ -148,7 +148,7 @@ export const INPUT_OBJECTS = {
     type: 'input' as const,
     animation: {
       frames: [greenSwitch1, greenSwitch2, greenSwitch3, greenSwitch4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 8, y: 26, width: 16, height: 6 },
     position: { x: 0, y: 0 },
@@ -160,7 +160,7 @@ export const INPUT_OBJECTS = {
     type: 'input' as const,
     animation: {
       frames: [redSwitch1, redSwitch2, redSwitch3, redSwitch4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 8, y: 26, width: 16, height: 6 },
     position: { x: 0, y: 0 },
@@ -189,7 +189,7 @@ export const OUTPUT_OBJECTS = {
     type: 'output' as const,
     animation: {
       frames: [blueTrap1, blueTrap2, blueTrap3, blueTrap4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 0, y: 0, width: 16, height: 32 },
     position: { x: 0, y: 0 },
@@ -200,7 +200,7 @@ export const OUTPUT_OBJECTS = {
     type: 'output' as const,
     animation: {
       frames: [greenTrap1, greenTrap2, greenTrap3, greenTrap4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 0, y: 0, width: 16, height: 32 },
     position: { x: 0, y: 0 },
@@ -211,7 +211,7 @@ export const OUTPUT_OBJECTS = {
     type: 'output' as const,
     animation: {
       frames: [redTrap1, redTrap2, redTrap3, redTrap4] as const,
-      speed: 18,
+      speed: 12,
     },
     hitbox: { x: 0, y: 0, width: 16, height: 32 },
     position: { x: 0, y: 0 },
