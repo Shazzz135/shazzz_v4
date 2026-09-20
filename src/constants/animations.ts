@@ -15,6 +15,10 @@ import punching1 from '../assets/character/punching/punching1.svg';
 import punching2 from '../assets/character/punching/punching2.svg';
 import prone1 from '../assets/character/prone/prone1.svg';
 import prone2 from '../assets/character/prone/prone2.svg';
+import death1 from '../assets/character/death/death1.svg';
+import death2 from '../assets/character/death/death2.svg';
+import death3 from '../assets/character/death/death3.svg';
+import death4 from '../assets/character/death/death4.svg';
 import crystal1 from '../assets/platforms/crystal/crystal1.svg';
 import crystal2 from '../assets/platforms/crystal/crystal2.svg';
 import crystal3 from '../assets/platforms/crystal/crystal3.svg';
@@ -22,7 +26,7 @@ import crystal4 from '../assets/platforms/crystal/crystal4.svg';
 import coin1 from '../assets/objects/coin/coin1.svg';
 import coin2 from '../assets/objects/coin/coin2.svg';
 
-export type AnimationState = 'idle' | 'running' | 'jumping' | 'punching' | 'prone';
+export type AnimationState = 'idle' | 'running' | 'jumping' | 'punching' | 'prone' | 'death';
 
 export const CHARACTER_WIDTH = 48;
 export const CHARACTER_HEIGHT = 48;
@@ -33,6 +37,7 @@ export interface AnimationFrames {
   jumping: string[];
   punching: string[];
   prone: string[];
+  death: string[];
 }
 
 // Frame sequences for each animation state
@@ -42,6 +47,7 @@ export const ANIMATION_FRAMES: AnimationFrames = {
   jumping: [jumping1, jumping2],
   punching: [punching1, punching2, punching1],
   prone: [prone1, prone2],
+  death: [death1, death2, death3, death4]
 } as const;
 
 export const ANIMATION_SPEED: Record<AnimationState, number> = {
@@ -50,6 +56,7 @@ export const ANIMATION_SPEED: Record<AnimationState, number> = {
   jumping: 1,
   punching: 2,
   prone: 4,
+  death: 8,
 };
 
 // Object animations

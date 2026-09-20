@@ -24,10 +24,6 @@ import {
   stopMoving,
 } from '../utils/physics';
 import { getCleanAddress } from '../utils/addressParser';
-import death1 from '../assets/character/death/death1.svg';
-import death2 from '../assets/character/death/death2.svg';
-import death3 from '../assets/character/death/death3.svg';
-import death4 from '../assets/character/death/death4.svg';
 
 interface CharacterProps {
   gameObjects: GameObject[];
@@ -61,9 +57,6 @@ const getPixelPositionFromAddress = (
     y: row * cellSize,
   };
 };
-
-const DEATH_FRAMES = [death1, death2, death3, death4];
-const DEATH_ANIMATION_SPEED = 12;
 
 const Character = forwardRef<
   {
@@ -122,13 +115,9 @@ const Character = forwardRef<
     const [isInvulnerable, setIsInvulnerable] = useState(false);
     const [flickerState, setFlickerState] = useState(true);
     const [isDead, setIsDead] = useState(false);
-    const [isDeathAnimationComplete, setIsDeathAnimationComplete] =
-      useState(false);
-
     const keysPressed = useRef<Record<string, boolean>>({});
     const gameLoopRef = useRef<number | null>(null);
     const animationTickRef = useRef(0);
-    const deathAnimationTickRef = useRef(0);
     const lastGridPositionRef = useRef<Array<{ x: number; y: number }>>([]);
     const isProneLockedRef = useRef(false);
     const invulnerabilityEndRef = useRef<number | null>(null);
@@ -136,6 +125,9 @@ const Character = forwardRef<
     const lastSpikeHitTimeRef = useRef<Record<string, number>>({});
     const currentlyOverlappingButtonsRef = useRef<Set<string>>(new Set());
     const punchCalledRef = useRef(false);
+
+    const hitboxAnimationState: keyof typeof HITBOX_CONFIG =
+  animationState === 'death' ? 'idle' : animationState;
 
     const characterRef = useRef(character);
     const facingRightRef = useRef(facingRight);
@@ -747,100 +739,74 @@ const Character = forwardRef<
     }, [isPunching, character, facingRight, onPunch]);
 
     useEffect(() => {
-      if (isDead) {
-        if (isDeathAnimationComplete) return;
+  let newAnimation: AnimationState = 'idle';
 
-        deathAnimationTickRef.current++;
+  if (isDead) {
+    newAnimation = 'death';
+  } else if (isPunching) {
+    newAnimation = 'punching';
+  } else if (isProne) {
+    newAnimation = 'prone';
+  } else if (
+    character.isJumping ||
+    (character.velocityY !== 0 && !character.onGround)
+  ) {
+    newAnimation = 'jumping';
+  } else if (character.velocityX !== 0) {
+    newAnimation = 'running';
+  }
 
-        if (deathAnimationTickRef.current >= DEATH_ANIMATION_SPEED) {
-          deathAnimationTickRef.current = 0;
+  if (newAnimation !== animationState) {
+    setAnimationState(newAnimation);
+    setFrameIndex(newAnimation === 'jumping' ? 1 : 0);
+    animationTickRef.current = 0;
 
-          setFrameIndex((prev) => {
-            const next = prev + 1;
+  }
 
-            if (next >= DEATH_FRAMES.length) {
-              setIsDeathAnimationComplete(true);
-              return DEATH_FRAMES.length - 1;
-            }
+  const interval = window.setInterval(() => {
+    animationTickRef.current++;
 
-            return next;
-          });
-        }
+    const speed = ANIMATION_SPEED[newAnimation];
 
-        return;
+    if (animationTickRef.current < speed) return;
+
+    animationTickRef.current = 0;
+
+    setFrameIndex((prev) => {
+      const framesForAnimation = ANIMATION_FRAMES[newAnimation];
+      const maxFrames = framesForAnimation.length;
+
+      if (newAnimation === 'death') {
+        const next = prev + 1;
+
+        return next;
       }
 
-      let newAnimation: AnimationState = 'idle';
-
-      if (isPunching) newAnimation = 'punching';
-      else if (isProne) newAnimation = 'prone';
-      else if (
-        character.isJumping ||
-        (character.velocityY !== 0 && !character.onGround)
-      ) {
-        newAnimation = 'jumping';
-      } else if (character.velocityX !== 0) {
-        newAnimation = 'running';
+      if (newAnimation === 'jumping') {
+        if (character.onGround) return 0;
+        return 1;
       }
 
-      if (newAnimation !== animationState) {
-        setAnimationState(newAnimation);
-        setFrameIndex(newAnimation === 'jumping' ? 1 : 0);
-        animationTickRef.current = 0;
+      const next = (prev + 1) % maxFrames;
+
+      if (newAnimation === 'punching' && next === 0) {
+        setIsPunching(false);
       }
 
-      const interval = window.setInterval(() => {
-        if (
-          newAnimation === 'prone' &&
-          character.velocityX === 0
-        ) {
-          setFrameIndex(0);
-          animationTickRef.current = 0;
-          return;
-        }
+      return next;
+    });
+  }, 16);
 
-        animationTickRef.current++;
+  return () => clearInterval(interval);
+}, [
+  character,
+  animationState,
+  isPunching,
+  isProne,
+  isDead,
+]);
 
-        const speed = ANIMATION_SPEED[newAnimation] || 10;
-
-        if (animationTickRef.current < speed) return;
-
-        animationTickRef.current = 0;
-
-        setFrameIndex((prev) => {
-          const framesForAnimation =
-            ANIMATION_FRAMES[newAnimation] || [];
-
-          const maxFrames = framesForAnimation.length || 1;
-
-          if (newAnimation === 'jumping') {
-            if (character.onGround) return 0;
-            return 1;
-          }
-
-          const next = (prev + 1) % maxFrames;
-
-          if (newAnimation === 'punching' && next === 0) {
-            setIsPunching(false);
-          }
-
-          return next;
-        });
-      }, 16);
-
-      return () => clearInterval(interval);
-    }, [
-      character,
-      animationState,
-      isPunching,
-      isProne,
-      isDead,
-      isDeathAnimationComplete,
-    ]);
-
-    const frames = isDead
-      ? DEATH_FRAMES
-      : ANIMATION_FRAMES[animationState];
+    const frames = ANIMATION_FRAMES[animationState];
 
     const currentFrame =
       frames[Math.min(frameIndex, frames.length - 1)] || frames[0];
@@ -887,23 +853,23 @@ const Character = forwardRef<
             <rect
               x={
                 character.x +
-                HITBOX_CONFIG[animationState].offsetX *
+                HITBOX_CONFIG[hitboxAnimationState].offsetX *
                   scale *
                   0.95
               }
               y={
                 character.y +
-                HITBOX_CONFIG[animationState].offsetY *
+                HITBOX_CONFIG[hitboxAnimationState].offsetY *
                   scale *
                   0.95
               }
               width={
-                HITBOX_CONFIG[animationState].width *
+                HITBOX_CONFIG[hitboxAnimationState].width *
                 scale *
                 0.95
               }
               height={
-                HITBOX_CONFIG[animationState].height *
+                HITBOX_CONFIG[hitboxAnimationState].height *
                 scale *
                 0.95
               }

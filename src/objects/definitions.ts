@@ -95,7 +95,7 @@ export const ANIMATED_OBJECTS = {
     type: 'portal' as const,
     animation: {
       frames: [portalRed1, portalRed2] as const,
-      speed: 62, // 1 FPS smooth animation (1000ms per frame)
+      speed: 24, // 1 FPS smooth animation (1000ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
@@ -107,7 +107,7 @@ export const ANIMATED_OBJECTS = {
     type: 'portal' as const,
     animation: {
       frames: [portalBlue1, portalBlue2] as const,
-      speed: 62, // 1 FPS smooth animation (1000ms per frame)
+      speed: 24, // 1 FPS smooth animation (1000ms per frame)
     },
     hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No hitbox - portals don't block
     position: { x: 0, y: 0 },
@@ -227,7 +227,7 @@ export const TRAP_OBJECTS = {
     id: 'spikes',
     type: 'block' as const,
     img: spikes,
-    hitbox: { x: 0, y: 0, width: 0, height: 0 }, // No collision - damage zone handled by proximity detection
+    hitbox: { x: 32, y: 32, width: 0, height: 0 }, // No collision - damage zone handled by proximity detection
     position: { x: 0, y: 0 },
     address: [],
     damageAmount: 1, // 1 full heart of damage
