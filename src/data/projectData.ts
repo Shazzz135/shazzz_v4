@@ -36,12 +36,12 @@ export const projectLevel: LevelData = {
     createObject(
       BLOCK_OBJECTS.stoneFull,
       { x: 0, y: 15 * 32 },
-      ['P1-30', 'A-E10L', 'A-E21R', 'A15-17D', 'B15-17D', 'C15-17D', 'J29-30']
+      ['P1-30', 'A-E10L', 'A-E21R', 'A15-17D', 'B15-17D', 'C15-17D', 'J29-30', 'E30']
     ),
     createObject(
       BLOCK_OBJECTS.stoneHalf,
       { x: 0, y: 15 * 32 },
-      ['J28F', 'E30F']
+      ['J28F', 'E29F']
     ),
     createObject(
       BLOCK_OBJECTS.grassFull,
@@ -66,12 +66,12 @@ export const projectLevel: LevelData = {
     createObject(
       ANIMATED_OBJECTS.coin,
       { x: 0, y: 15 * 32 },
-      ['J7', 'G4', 'B4', 'I12', 'J18', 'J25', 'G30', 'D24', 'B29', 'D16']
+      ['J7', 'G4', 'B4', 'I12', 'J18', 'J25', 'E1', 'D24', 'B29', 'D16']
     ),
     {
       ...ANIMATED_OBJECTS.portalBlue,
       position: { x: 8 * 32, y: 26 * 32 }, // M27
-      address: ['G28x2'],
+      address: ['G29x2'],
       destinationAddress: 'D12x2'
     } as GameObject,
     {
